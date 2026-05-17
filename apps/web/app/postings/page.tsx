@@ -243,15 +243,100 @@ function PostingRow({
 }
 
 function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: ResumeTemplate[] }) {
+  const periodLabel =
+    posting.apply_period_raw ??
+    (posting.apply_start_date || posting.apply_end_date
+      ? `${formatDate(posting.apply_start_date)} ~ ${formatDate(posting.apply_end_date)}`
+      : null);
+
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
         backgroundColor: "var(--rw-subtle)",
         borderTop: "1px solid var(--rw-border)",
       }}
     >
+      <section
+        style={{
+          padding: "16px 24px",
+          borderBottom: "1px solid var(--rw-border)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: "var(--rw-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            공고 상세
+          </div>
+          {periodLabel ? (
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--rw-muted)",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              접수기간 · {periodLabel}
+            </div>
+          ) : null}
+        </div>
+        {posting.normalized_content ? (
+          <div
+            style={{
+              maxHeight: 360,
+              overflowY: "auto",
+              padding: "12px 14px",
+              backgroundColor: "#ffffff",
+              border: "1px solid var(--rw-border)",
+              borderRadius: 2,
+              fontSize: 12,
+              lineHeight: 1.6,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              color: "var(--rw-foreground)",
+            }}
+          >
+            {posting.normalized_content}
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: "12px 14px",
+              backgroundColor: "#ffffff",
+              border: "1px dashed var(--rw-border)",
+              borderRadius: 2,
+              fontSize: 12,
+              color: "var(--rw-muted)",
+            }}
+          >
+            수집된 본문이 없습니다. 원문 링크에서 확인하세요.
+          </div>
+        )}
+      </section>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+        }}
+      >
       <form
         action={updatePostingCurationAction}
         style={{
@@ -354,6 +439,7 @@ function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: Resume
           </>
         )}
       </form>
+      </div>
     </div>
   );
 }
