@@ -55,6 +55,8 @@ class JobPosting(Base):
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     curation_status: Mapped[str] = mapped_column(String(30), default="new", index=True)
     curation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_bookmarked: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_todo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

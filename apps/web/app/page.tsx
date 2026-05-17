@@ -13,6 +13,10 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getDashboard } from "@/lib/api";
 import { formatDate, formatDateTime, shorten } from "@/lib/format";
+import {
+  getApplicationStatusLabel,
+  getPostingCurationLabel,
+} from "@/lib/status-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +59,7 @@ export default async function Home() {
         description="로컬에 수집된 채용 공고와 지원 진행 상황을 한눈에 확인합니다."
         stats={[
           { label: "수집 공고", value: dashboard.total_postings },
+          { label: "작성예정", value: dashboard.todo_postings, tone: "accent" },
           { label: "관심 공고", value: dashboard.interesting_postings, tone: "accent" },
           { label: "진행 지원", value: dashboard.active_applications },
           { label: "이력서 템플릿", value: dashboard.resume_count },
@@ -163,7 +168,12 @@ export default async function Home() {
                 <tbody>
                   {dashboard.recent_postings.slice(0, 8).map((posting) => (
                     <tr key={posting.id}>
-                      <td style={{ ...tdStyle, fontWeight: 600 }}>{posting.company_name}</td>
+                      <td style={tdStyle}>
+                        <div style={{ fontWeight: 600 }}>{posting.company_name}</div>
+                        <div style={{ marginTop: 4 }}>
+                          <StatusBadge label={posting.source_name} tone="neutral" />
+                        </div>
+                      </td>
                       <td style={tdStyle}>
                         <div
                           style={{
@@ -193,7 +203,7 @@ export default async function Home() {
                       </td>
                       <td style={{ ...tdStyle, textAlign: "center" }}>
                         <StatusBadge
-                          label={posting.curation_status}
+                          label={getPostingCurationLabel(posting.curation_status)}
                           tone={statusTone(posting.curation_status)}
                         />
                       </td>
@@ -257,7 +267,7 @@ export default async function Home() {
                         </div>
                       </div>
                       <StatusBadge
-                        label={application.status}
+                        label={getApplicationStatusLabel(application.status)}
                         tone={statusTone(application.status)}
                       />
                     </div>

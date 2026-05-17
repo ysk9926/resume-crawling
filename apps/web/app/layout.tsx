@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { Sidebar } from "@/components/ui/sidebar";
 
@@ -31,7 +31,9 @@ export default function RootLayout({
             overflow: "hidden",
           }}
         >
-          <Sidebar />
+          <Suspense fallback={null}>
+            <Sidebar />
+          </Suspense>
           <main
             style={{
               flex: 1,

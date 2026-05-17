@@ -46,11 +46,15 @@ export async function getPostings(filters?: {
   q?: string;
   curation_status?: string;
   source_key?: string;
+  bookmarked?: boolean;
+  todo?: boolean;
 }): Promise<JobPosting[]> {
   const search = new URLSearchParams();
   if (filters?.q) search.set("q", filters.q);
   if (filters?.curation_status) search.set("curation_status", filters.curation_status);
   if (filters?.source_key) search.set("source_key", filters.source_key);
+  if (filters?.bookmarked !== undefined) search.set("bookmarked", filters.bookmarked ? "true" : "false");
+  if (filters?.todo !== undefined) search.set("todo", filters.todo ? "true" : "false");
   const suffix = search.size > 0 ? `?${search.toString()}` : "";
   return request<JobPosting[]>(`/api/postings${suffix}`);
 }
@@ -74,7 +78,15 @@ export async function postSyncSource(sourceKey: string, startPage: number, endPa
   });
 }
 
-export async function patchPosting(postingId: number, payload: { curation_status: string; curation_note: string }) {
+export async function patchPosting(
+  postingId: number,
+  payload: {
+    curation_status?: string;
+    curation_note?: string;
+    is_bookmarked?: boolean;
+    is_todo?: boolean;
+  },
+) {
   return request<JobPosting>(`/api/postings/${postingId}`, {
     method: "PATCH",
     bodyJson: payload,

@@ -60,6 +60,20 @@ export async function updatePostingCurationAction(formData: FormData) {
   revalidateAll();
 }
 
+export async function togglePostingBookmarkAction(formData: FormData) {
+  const postingId = parseRequiredNumber(formData.get("postingId"), "postingId");
+  const next = String(formData.get("nextBookmarked") ?? "1") === "1";
+  await patchPosting(postingId, { is_bookmarked: next });
+  revalidateAll();
+}
+
+export async function togglePostingTodoAction(formData: FormData) {
+  const postingId = parseRequiredNumber(formData.get("postingId"), "postingId");
+  const next = String(formData.get("nextTodo") ?? "1") === "1";
+  await patchPosting(postingId, { is_todo: next });
+  revalidateAll();
+}
+
 export async function createResumeAction(formData: FormData) {
   await createResume({
     title: String(formData.get("title") ?? ""),

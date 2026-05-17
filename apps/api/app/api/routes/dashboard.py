@@ -17,6 +17,9 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 @router.get("", response_model=DashboardOut)
 def get_dashboard(db: Session = Depends(get_db)) -> DashboardOut:
     total_postings = db.scalar(select(func.count(JobPosting.id))) or 0
+    todo_postings = db.scalar(
+        select(func.count(JobPosting.id)).where(JobPosting.is_todo.is_(True))
+    ) or 0
     interesting_postings = db.scalar(
         select(func.count(JobPosting.id)).where(JobPosting.curation_status == "interesting")
     ) or 0
@@ -57,6 +60,7 @@ def get_dashboard(db: Session = Depends(get_db)) -> DashboardOut:
 
     return DashboardOut(
         total_postings=total_postings,
+        todo_postings=todo_postings,
         interesting_postings=interesting_postings,
         active_applications=active_applications,
         resume_count=resume_count,

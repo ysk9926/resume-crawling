@@ -13,6 +13,7 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getApplications } from "@/lib/api";
 import { formatDateTime, toInputDate } from "@/lib/format";
+import { getApplicationStatusLabel } from "@/lib/status-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -90,10 +91,10 @@ export default async function ApplicationsPage() {
         description="지원 건마다 이력서 스냅샷이 저장되고, 상태와 메모를 함께 추적합니다."
         stats={[
           { label: "전체", value: counts.total },
-          { label: "PLANNED", value: counts.planned, tone: "muted" },
-          { label: "IN PROGRESS", value: counts.inProgress, tone: "accent" },
-          { label: "OFFER", value: counts.offer },
-          { label: "REJECTED", value: counts.rejected, tone: "muted" },
+          { label: "지원 예정", value: counts.planned, tone: "muted" },
+          { label: "진행 중", value: counts.inProgress, tone: "accent" },
+          { label: "오퍼", value: counts.offer },
+          { label: "종료", value: counts.rejected, tone: "muted" },
         ]}
       />
 
@@ -143,7 +144,7 @@ export default async function ApplicationsPage() {
                   </div>
                   <div>
                     <StatusBadge
-                      label={application.status}
+                      label={getApplicationStatusLabel(application.status)}
                       tone={toneForStatus(application.status)}
                     />
                   </div>
@@ -215,13 +216,13 @@ export default async function ApplicationsPage() {
                           defaultValue={application.status}
                           style={inputStyle}
                         >
-                          <option value="planned">planned</option>
-                          <option value="applied">applied</option>
-                          <option value="document_passed">document_passed</option>
-                          <option value="interview">interview</option>
-                          <option value="offer">offer</option>
-                          <option value="rejected">rejected</option>
-                          <option value="withdrawn">withdrawn</option>
+                          <option value="planned">지원 예정</option>
+                          <option value="applied">지원 완료</option>
+                          <option value="document_passed">서류 통과</option>
+                          <option value="interview">면접 진행</option>
+                          <option value="offer">오퍼</option>
+                          <option value="rejected">불합격</option>
+                          <option value="withdrawn">철회</option>
                         </select>
                       </label>
                       <label style={labelStyle}>

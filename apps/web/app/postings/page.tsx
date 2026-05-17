@@ -1,4 +1,9 @@
-import { createApplicationAction, updatePostingCurationAction } from "@/app/actions";
+import {
+  createApplicationAction,
+  updatePostingCurationAction,
+} from "@/app/actions";
+import { BookmarkToggle } from "@/components/ui/bookmark-toggle";
+import { TodoToggle } from "@/components/ui/todo-toggle";
 import { ApiUnavailable } from "@/components/ui/api-unavailable";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
@@ -13,6 +18,10 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { getPostings, getResumes, getSources } from "@/lib/api";
 import type { JobPosting, ResumeTemplate } from "@/lib/types";
 import { formatDate, shorten } from "@/lib/format";
+import {
+  getApplicationStatusLabel,
+  getPostingCurationLabel,
+} from "@/lib/status-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +30,8 @@ type PageProps = {
     q?: string;
     curation?: string;
     source?: string;
+    bookmarked?: string;
+    todo?: string;
   }>;
 };
 
@@ -36,12 +47,16 @@ export default async function PostingsPage({ searchParams }: PageProps) {
   const q = params.q ?? "";
   const curation = params.curation ?? "";
   const source = params.source ?? "";
+  const bookmarkedOnly = params.bookmarked === "1";
+  const todoOnly = params.todo === "1";
 
   const [postings, resumes, sources] = await Promise.all([
     getPostings({
       q: q || undefined,
       curation_status: curation || undefined,
       source_key: source || undefined,
+      bookmarked: bookmarkedOnly ? true : undefined,
+      todo: todoOnly ? true : undefined,
     }).catch(() => null),
     getResumes().catch(() => null),
     getSources().catch(() => null),
@@ -53,9 +68,11 @@ export default async function PostingsPage({ searchParams }: PageProps) {
 
   const counts = {
     total: postings.length,
+    todo: postings.filter((p) => p.is_todo).length,
     new: postings.filter((p) => p.curation_status === "new").length,
     interesting: postings.filter((p) => p.curation_status === "interesting").length,
     ignored: postings.filter((p) => p.curation_status === "ignored").length,
+    bookmarked: postings.filter((p) => p.is_bookmarked).length,
   };
 
   return (
@@ -65,9 +82,11 @@ export default async function PostingsPage({ searchParams }: PageProps) {
         description="원문을 수집한 뒤 상태·메모·지원 여부를 정제합니다."
         stats={[
           { label: "전체", value: counts.total },
-          { label: "NEW", value: counts.new },
-          { label: "INTERESTING", value: counts.interesting, tone: "accent" },
-          { label: "IGNORED", value: counts.ignored, tone: "muted" },
+          { label: "작성예정", value: counts.todo, tone: "accent" },
+          { label: "찜", value: counts.bookmarked, tone: "accent" },
+          { label: "검토 전", value: counts.new },
+          { label: "관심", value: counts.interesting, tone: "accent" },
+          { label: "제외", value: counts.ignored, tone: "muted" },
         ]}
       />
 
@@ -91,9 +110,9 @@ export default async function PostingsPage({ searchParams }: PageProps) {
         />
         <select name="curation" defaultValue={curation} style={inputStyle}>
           <option value="">모든 상태</option>
-          <option value="new">new</option>
-          <option value="interesting">interesting</option>
-          <option value="ignored">ignored</option>
+          <option value="new">검토 전</option>
+          <option value="interesting">관심</option>
+          <option value="ignored">제외</option>
         </select>
         <select name="source" defaultValue={source} style={inputStyle}>
           <option value="">모든 수집원</option>
@@ -103,10 +122,46 @@ export default async function PostingsPage({ searchParams }: PageProps) {
             </option>
           ))}
         </select>
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12,
+            color: "var(--rw-foreground)",
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            name="bookmarked"
+            value="1"
+            defaultChecked={bookmarkedOnly}
+          />
+          찜만 보기
+        </label>
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12,
+            color: "var(--rw-foreground)",
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            name="todo"
+            value="1"
+            defaultChecked={todoOnly}
+          />
+          작성예정만 보기
+        </label>
         <button type="submit" style={primaryButtonStyle}>
           필터 적용
         </button>
-        {q || curation || source ? (
+        {q || curation || source || bookmarkedOnly || todoOnly ? (
           <a href="/postings" style={secondaryButtonStyle}>
             초기화
           </a>
@@ -149,14 +204,18 @@ function PostingRow({
           listStyle: "none",
           cursor: "pointer",
           display: "grid",
-          gridTemplateColumns: "160px minmax(0,1fr) 110px 90px 110px 200px",
+          gridTemplateColumns: "32px 160px minmax(0,1fr) 110px 90px 110px 320px",
           alignItems: "start",
           padding: "12px 24px",
           gap: 16,
         }}
       >
-        <div style={{ fontSize: 12, fontWeight: 600, paddingTop: 2 }}>
-          {posting.company_name}
+        <BookmarkToggle postingId={posting.id} isBookmarked={posting.is_bookmarked} />
+        <div style={{ paddingTop: 2 }}>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>{posting.company_name}</div>
+          <div style={{ marginTop: 4 }}>
+            <StatusBadge label={posting.source_name} tone="neutral" />
+          </div>
         </div>
         <div style={{ minWidth: 0 }}>
           <div
@@ -170,6 +229,11 @@ function PostingRow({
           >
             {posting.title}
           </div>
+          {posting.is_todo ? (
+            <div style={{ marginTop: 4 }}>
+              <StatusBadge label="작성예정" tone="warning" />
+            </div>
+          ) : null}
           {posting.tags.length ? (
             <div style={{ marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" }}>
               {posting.tags.slice(0, 4).map((tag) => (
@@ -194,13 +258,16 @@ function PostingRow({
         </div>
         <div style={{ textAlign: "center", paddingTop: 2 }}>
           <StatusBadge
-            label={posting.curation_status}
+            label={getPostingCurationLabel(posting.curation_status)}
             tone={toneForStatus(posting.curation_status)}
           />
         </div>
         <div style={{ textAlign: "center", paddingTop: 2 }}>
           {posting.application_status ? (
-            <StatusBadge label={posting.application_status} tone="success" />
+            <StatusBadge
+              label={getApplicationStatusLabel(posting.application_status)}
+              tone="success"
+            />
           ) : (
             <span style={{ color: "var(--rw-muted)", fontSize: 11 }}>—</span>
           )}
@@ -215,7 +282,8 @@ function PostingRow({
         >
           {formatDate(posting.posted_at)}
         </div>
-        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <TodoToggle postingId={posting.id} isTodo={posting.is_todo} />
           <a
             href={posting.detail_url}
             target="_blank"
@@ -276,14 +344,24 @@ function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: Resume
         >
           <div
             style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: "var(--rw-muted)",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
             }}
           >
-            공고 상세
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: "var(--rw-muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              공고 상세
+            </div>
+            <StatusBadge label={posting.source_name} tone="neutral" />
           </div>
           {periodLabel ? (
             <div
@@ -364,9 +442,9 @@ function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: Resume
           defaultValue={posting.curation_status}
           style={inputStyle}
         >
-          <option value="new">new</option>
-          <option value="interesting">interesting</option>
-          <option value="ignored">ignored</option>
+          <option value="new">검토 전</option>
+          <option value="interesting">관심</option>
+          <option value="ignored">제외</option>
         </select>
         <textarea
           name="curationNote"

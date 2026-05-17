@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .base import Crawler
+from .jobkorea import JobKoreaCrawler
 from .kofia import KofiaCrawler
 
 
@@ -14,6 +15,7 @@ class SourceDefinition:
 
 
 CRAWLER_REGISTRY: dict[str, type[Crawler]] = {
+    JobKoreaCrawler.source_key: JobKoreaCrawler,
     KofiaCrawler.source_key: KofiaCrawler,
 }
 

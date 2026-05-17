@@ -50,8 +50,10 @@ class JobSyncRunOut(BaseModel):
 
 
 class JobPostingUpdate(BaseModel):
-    curation_status: str
-    curation_note: str = ""
+    curation_status: str | None = None
+    curation_note: str | None = None
+    is_bookmarked: bool | None = None
+    is_todo: bool | None = None
 
 
 class JobPostingOut(BaseModel):
@@ -73,6 +75,8 @@ class JobPostingOut(BaseModel):
     tags: list[str]
     curation_status: str
     curation_note: str | None
+    is_bookmarked: bool = False
+    is_todo: bool = False
     last_seen_at: datetime
     application_id: int | None = None
     application_status: str | None = None
@@ -139,6 +143,7 @@ class ApplicationOut(BaseModel):
 
 class DashboardOut(BaseModel):
     total_postings: int
+    todo_postings: int
     interesting_postings: int
     active_applications: int
     resume_count: int

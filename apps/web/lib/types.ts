@@ -44,6 +44,8 @@ export type JobPosting = {
   tags: string[];
   curation_status: string;
   curation_note: string | null;
+  is_bookmarked: boolean;
+  is_todo: boolean;
   last_seen_at: string;
   application_id: number | null;
   application_status: string | null;
@@ -79,6 +81,7 @@ export type Application = {
 
 export type Dashboard = {
   total_postings: number;
+  todo_postings: number;
   interesting_postings: number;
   active_applications: number;
   resume_count: number;

@@ -12,6 +12,25 @@ from app.schemas import JobPostingOut, JobPostingUpdate
 router = APIRouter(prefix="/postings", tags=["postings"])
 
 
+def resolve_posting_flags(
+    current_bookmarked: bool,
+    current_todo: bool,
+    next_bookmarked: bool | None,
+    next_todo: bool | None,
+) -> tuple[bool, bool]:
+    bookmarked = current_bookmarked if next_bookmarked is None else next_bookmarked
+    todo = current_todo if next_todo is None else next_todo
+
+    if next_bookmarked is False and next_todo is None:
+        todo = False
+    if todo:
+        bookmarked = True
+    if not bookmarked:
+        todo = False
+
+    return bookmarked, todo
+
+
 def serialize_posting(posting: JobPosting) -> JobPostingOut:
     return JobPostingOut(
         id=posting.id,
@@ -30,6 +49,8 @@ def serialize_posting(posting: JobPosting) -> JobPostingOut:
         tags=posting.tags or [],
         curation_status=posting.curation_status,
         curation_note=posting.curation_note,
+        is_bookmarked=bool(posting.is_bookmarked),
+        is_todo=bool(posting.is_todo),
         last_seen_at=posting.last_seen_at,
         application_id=posting.application.id if posting.application else None,
         application_status=posting.application.status if posting.application else None,
@@ -41,6 +62,8 @@ def list_postings(
     q: str | None = Query(default=None),
     curation_status: str | None = Query(default=None),
     source_key: str | None = Query(default=None),
+    bookmarked: bool | None = Query(default=None),
+    todo: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[JobPostingOut]:
     statement = (
@@ -66,6 +89,10 @@ def list_postings(
         filters.append(JobPosting.curation_status == curation_status)
     if source_key:
         filters.append(JobPosting.source.has(key=source_key))
+    if bookmarked is not None:
+        filters.append(JobPosting.is_bookmarked == bookmarked)
+    if todo is not None:
+        filters.append(JobPosting.is_todo == todo)
 
     if filters:
         statement = statement.where(and_(*filters))
@@ -93,8 +120,16 @@ def update_posting(
     if posting is None:
         raise HTTPException(status_code=404, detail="Job posting not found.")
 
-    posting.curation_status = payload.curation_status
-    posting.curation_note = payload.curation_note
+    if payload.curation_status is not None:
+        posting.curation_status = payload.curation_status
+    if payload.curation_note is not None:
+        posting.curation_note = payload.curation_note
+    posting.is_bookmarked, posting.is_todo = resolve_posting_flags(
+        current_bookmarked=bool(posting.is_bookmarked),
+        current_todo=bool(posting.is_todo),
+        next_bookmarked=payload.is_bookmarked,
+        next_todo=payload.is_todo,
+    )
     db.commit()
     db.refresh(posting)
     return serialize_posting(posting)
