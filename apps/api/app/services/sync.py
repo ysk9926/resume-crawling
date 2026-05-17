@@ -66,7 +66,7 @@ def upsert_postings(
     return inserted, updated
 
 
-def run_source_sync(session: Session, source_key: str, page_limit: int) -> JobSyncRun:
+def run_source_sync(session: Session, source_key: str, start_page: int, end_page: int) -> JobSyncRun:
     source = session.scalar(select(Source).where(Source.key == source_key))
     if source is None:
         raise ValueError(f"Source not found: {source_key}")
@@ -76,14 +76,27 @@ def run_source_sync(session: Session, source_key: str, page_limit: int) -> JobSy
     session.commit()
     session.refresh(sync_run)
 
+    crawler = get_crawler(source_key)
     try:
-        crawler = get_crawler(source_key)
-        crawled_postings = crawler.crawl(page_limit=page_limit)
+        crawl_info = crawler.get_crawl_info()
+        if start_page < 1:
+            raise ValueError("시작 페이지는 1 이상이어야 합니다.")
+        if end_page < start_page:
+            raise ValueError("종료 페이지는 시작 페이지보다 크거나 같아야 합니다.")
+        if end_page > crawl_info.total_pages:
+            raise ValueError(
+                f"요청한 종료 페이지가 총 페이지 수를 초과했습니다. "
+                f"(요청: {end_page}, 총 페이지: {crawl_info.total_pages})"
+            )
+
+        crawled_postings = crawler.crawl(start_page=start_page, end_page=end_page)
         inserted_count, updated_count = upsert_postings(session, source, crawled_postings)
 
         source.last_synced_at = utcnow()
         sync_run.status = "success"
-        sync_run.message = f"{len(crawled_postings)}개의 공고를 동기화했습니다."
+        sync_run.message = (
+            f"{start_page}~{end_page}페이지에서 {len(crawled_postings)}개의 공고를 동기화했습니다."
+        )
         sync_run.inserted_count = inserted_count
         sync_run.updated_count = updated_count
         sync_run.total_count = len(crawled_postings)
@@ -91,6 +104,16 @@ def run_source_sync(session: Session, source_key: str, page_limit: int) -> JobSy
         session.commit()
         session.refresh(sync_run)
         return sync_run
+    except ValueError as exc:
+        session.rollback()
+        failed_run = session.get(JobSyncRun, sync_run.id)
+        if failed_run is not None:
+            failed_run.status = "failed"
+            failed_run.message = str(exc)
+            failed_run.finished_at = utcnow()
+            session.commit()
+            session.refresh(failed_run)
+        raise
     except Exception as exc:
         session.rollback()
         failed_run = session.get(JobSyncRun, sync_run.id)
@@ -102,6 +125,8 @@ def run_source_sync(session: Session, source_key: str, page_limit: int) -> JobSy
             session.refresh(failed_run)
             return failed_run
         raise
+    finally:
+        crawler.close()
 
 
 def create_or_replace_application(

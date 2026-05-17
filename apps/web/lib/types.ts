@@ -20,6 +20,13 @@ export type SyncRun = {
   finished_at: string | null;
 };
 
+export type SourceCrawlInfo = {
+  source_key: string;
+  current_page: number;
+  total_pages: number;
+  total_items: number;
+};
+
 export type JobPosting = {
   id: number;
   source_key: string;

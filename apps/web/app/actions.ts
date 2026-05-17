@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import {
   createApplication,
   createResume,
+  getSourceCrawlInfo,
   patchApplication,
   patchPosting,
   patchResume,
@@ -28,9 +29,24 @@ function revalidateAll() {
 
 export async function syncSourceAction(formData: FormData) {
   const sourceKey = String(formData.get("sourceKey") ?? "");
-  const pageLimit = parseRequiredNumber(formData.get("pageLimit"), "pageLimit");
-  await postSyncSource(sourceKey, pageLimit);
+  const startPage = parseRequiredNumber(formData.get("startPage"), "startPage");
+  const endPage = parseRequiredNumber(formData.get("endPage"), "endPage");
+  await postSyncSource(sourceKey, startPage, endPage);
   revalidateAll();
+}
+
+export async function fetchSourceCrawlInfoAction(sourceKey: string) {
+  return getSourceCrawlInfo(sourceKey);
+}
+
+export async function syncSourceRangeAction(input: {
+  sourceKey: string;
+  startPage: number;
+  endPage: number;
+}) {
+  const syncRun = await postSyncSource(input.sourceKey, input.startPage, input.endPage);
+  revalidateAll();
+  return syncRun;
 }
 
 export async function updatePostingCurationAction(formData: FormData) {

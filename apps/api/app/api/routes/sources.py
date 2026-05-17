@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.crawlers.registry import get_crawler
 from app.database import get_db
 from app.models import JobPosting, Source
-from app.schemas import JobSyncRunOut, SourceSummary, SyncRequest
+from app.schemas import JobSyncRunOut, SourceCrawlInfoOut, SourceSummary, SyncRequest
 from app.services.sync import run_source_sync
 
 
@@ -48,7 +49,40 @@ def sync_source(
     db: Session = Depends(get_db),
 ) -> JobSyncRunOut:
     try:
-        sync_run = run_source_sync(db, source_key=source_key, page_limit=payload.page_limit)
+        sync_run = run_source_sync(
+            db,
+            source_key=source_key,
+            start_page=payload.start_page,
+            end_page=payload.end_page,
+        )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        detail = str(exc)
+        status_code = 404 if detail.startswith("Source not found:") else 400
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    if sync_run.status == "failed":
+        raise HTTPException(status_code=502, detail=sync_run.message or "Sync failed")
     return JobSyncRunOut.model_validate(sync_run)
+
+
+@router.get("/{source_key}/crawl-info", response_model=SourceCrawlInfoOut)
+def get_source_crawl_info(source_key: str) -> SourceCrawlInfoOut:
+    try:
+        crawler = get_crawler(source_key)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Source not found: {source_key}") from exc
+
+    try:
+        crawl_info = crawler.get_crawl_info()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        crawler.close()
+
+    return SourceCrawlInfoOut(
+        source_key=source_key,
+        current_page=crawl_info.current_page,
+        total_pages=crawl_info.total_pages,
+        total_items=crawl_info.total_items,
+    )

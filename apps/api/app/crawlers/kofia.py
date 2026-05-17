@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import math
+import re
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup, Tag
 
-from app.crawlers.base import CrawledJobPosting
+from app.crawlers.base import CrawlInfo, CrawledJobPosting
 from app.utils.dates import parse_date, parse_date_range
 from app.utils.text import derive_tags, normalize_whitespace
 
@@ -16,6 +18,7 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0 Safari/537.36"
 )
+TOTAL_ITEMS_PATTERN = re.compile(r"총\s*([\d,]+)\s*건의 게시물이 검색되었습니다")
 
 
 @dataclass(slots=True)
@@ -43,22 +46,38 @@ class KofiaCrawler:
             headers={"User-Agent": USER_AGENT},
         )
         self._owns_client = client is None
+        self._is_closed = False
 
-    def crawl(self, page_limit: int = 1) -> list[CrawledJobPosting]:
+    def get_crawl_info(self, page: int = 1) -> CrawlInfo:
+        if page < 1:
+            raise ValueError("조회 페이지는 1 이상이어야 합니다.")
+
+        soup = self._fetch_list_page(page)
+        total_items = self._extract_total_items(soup)
+        total_pages = self._extract_total_pages(soup, total_items)
+        return CrawlInfo(current_page=page, total_pages=total_pages, total_items=total_items)
+
+    def crawl(self, start_page: int = 1, end_page: int = 1) -> list[CrawledJobPosting]:
+        if start_page < 1:
+            raise ValueError("시작 페이지는 1 이상이어야 합니다.")
+        if end_page < start_page:
+            raise ValueError("종료 페이지는 시작 페이지보다 크거나 같아야 합니다.")
+
         postings: list[CrawledJobPosting] = []
         try:
-            for page in range(1, page_limit + 1):
+            for page in range(start_page, end_page + 1):
                 postings.extend(self._crawl_page(page))
             return postings
         finally:
-            if self._owns_client:
-                self.client.close()
+            self.close()
+
+    def close(self) -> None:
+        if self._owns_client and not self._is_closed:
+            self.client.close()
+            self._is_closed = True
 
     def _crawl_page(self, page: int) -> list[CrawledJobPosting]:
-        response = self.client.get(self.base_url, params={"page": page})
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = self._fetch_list_page(page)
         rows = soup.select("table.common2 tbody tr") or soup.select("table.common1 tbody tr")
 
         postings: list[CrawledJobPosting] = []
@@ -96,6 +115,11 @@ class KofiaCrawler:
             )
 
         return postings
+
+    def _fetch_list_page(self, page: int) -> BeautifulSoup:
+        response = self.client.get(self.base_url, params={"page": page})
+        response.raise_for_status()
+        return BeautifulSoup(response.text, "html.parser")
 
     def _fetch_detail(self, detail_url: str) -> KofiaDetail:
         response = self.client.get(detail_url)
@@ -143,3 +167,36 @@ class KofiaCrawler:
                 continue
             return row.find("td")
         return None
+
+    def _extract_total_items(self, soup: BeautifulSoup) -> int:
+        count_node = soup.select_one("span.mgr10 em.brown")
+        if count_node is not None:
+            count_text = count_node.get_text("", strip=True).replace(",", "")
+            if count_text.isdigit():
+                return int(count_text)
+
+        match = TOTAL_ITEMS_PATTERN.search(soup.get_text(" ", strip=True))
+        if match:
+            return int(match.group(1).replace(",", ""))
+
+        raise ValueError("총 게시물 수를 찾을 수 없습니다.")
+
+    def _extract_total_pages(self, soup: BeautifulSoup, total_items: int) -> int:
+        last_page_image = soup.find("img", alt="마지막 페이지로 가기")
+        if last_page_image is not None and last_page_image.parent is not None:
+            last_href = last_page_image.parent.get("href", "")
+            last_page = parse_qs(urlparse(last_href).query).get("page", [""])[0]
+            if last_page.isdigit():
+                return max(1, int(last_page))
+
+        visible_pages: list[int] = []
+        for node in soup.select("#currentPage #number a, #currentPage #number em"):
+            text = node.get_text(" ", strip=True)
+            if text.isdigit():
+                visible_pages.append(int(text))
+        if visible_pages:
+            return max(visible_pages)
+
+        rows = soup.select("table.common2 tbody tr") or soup.select("table.common1 tbody tr")
+        page_size = max(len(rows), 1)
+        return max(1, math.ceil(total_items / page_size))

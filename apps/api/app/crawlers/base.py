@@ -6,6 +6,13 @@ from typing import Protocol
 
 
 @dataclass(slots=True)
+class CrawlInfo:
+    current_page: int
+    total_pages: int
+    total_items: int
+
+
+@dataclass(slots=True)
 class CrawledJobPosting:
     external_id: str
     company_name: str
@@ -26,5 +33,11 @@ class Crawler(Protocol):
     display_name: str
     base_url: str
 
-    def crawl(self, page_limit: int = 1) -> list[CrawledJobPosting]:
+    def get_crawl_info(self, page: int = 1) -> CrawlInfo:
+        ...
+
+    def crawl(self, start_page: int = 1, end_page: int = 1) -> list[CrawledJobPosting]:
+        ...
+
+    def close(self) -> None:
         ...

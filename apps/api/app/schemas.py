@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class SourceSummary(BaseModel):
@@ -18,7 +18,21 @@ class SourceSummary(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    page_limit: int = Field(default=1, ge=1, le=10)
+    start_page: int = Field(default=1, ge=1, le=10000)
+    end_page: int = Field(default=1, ge=1, le=10000)
+
+    @model_validator(mode="after")
+    def validate_page_range(self) -> "SyncRequest":
+        if self.end_page < self.start_page:
+            raise ValueError("종료 페이지는 시작 페이지보다 크거나 같아야 합니다.")
+        return self
+
+
+class SourceCrawlInfoOut(BaseModel):
+    source_key: str
+    current_page: int
+    total_pages: int
+    total_items: int
 
 
 class JobSyncRunOut(BaseModel):

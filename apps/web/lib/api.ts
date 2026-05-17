@@ -3,6 +3,7 @@ import type {
   Dashboard,
   JobPosting,
   ResumeTemplate,
+  SourceCrawlInfo,
   SourceSummary,
   SyncRun,
 } from "@/lib/types";
@@ -62,10 +63,14 @@ export async function getApplications(): Promise<Application[]> {
   return request<Application[]>("/api/applications");
 }
 
-export async function postSyncSource(sourceKey: string, pageLimit: number): Promise<SyncRun> {
+export async function getSourceCrawlInfo(sourceKey: string): Promise<SourceCrawlInfo> {
+  return request<SourceCrawlInfo>(`/api/sources/${sourceKey}/crawl-info`);
+}
+
+export async function postSyncSource(sourceKey: string, startPage: number, endPage: number): Promise<SyncRun> {
   return request<SyncRun>(`/api/sources/${sourceKey}/sync`, {
     method: "POST",
-    bodyJson: { page_limit: pageLimit },
+    bodyJson: { start_page: startPage, end_page: endPage },
   });
 }
 

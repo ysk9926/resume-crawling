@@ -1,11 +1,13 @@
+import pytest
 from datetime import date
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.crawlers.base import CrawledJobPosting
+from app.crawlers.base import CrawlInfo, CrawledJobPosting
 from app.database import Base
-from app.models import JobPosting, ResumeTemplate, Source
+from app.models import JobPosting, JobSyncRun, ResumeTemplate, Source
+from app.services import sync as sync_service
 from app.services.sync import create_or_replace_application, upsert_postings
 
 
@@ -106,3 +108,35 @@ def test_create_or_replace_application_uses_resume_snapshot() -> None:
         assert application.resume_snapshot_title == "데이터용 이력서 · 한빛자산운용"
         assert application.resume_snapshot_markdown == "# 경력\n- 수집 파이프라인 구축"
         assert application.status == "planned"
+
+
+def test_run_source_sync_rejects_range_outside_total_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    class StubCrawler:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def get_crawl_info(self, page: int = 1) -> CrawlInfo:
+            return CrawlInfo(current_page=page, total_pages=3, total_items=30)
+
+        def crawl(self, start_page: int = 1, end_page: int = 1) -> list[CrawledJobPosting]:
+            raise AssertionError("crawl should not run when the page range is invalid")
+
+        def close(self) -> None:
+            self.closed = True
+
+    crawler = StubCrawler()
+
+    with make_session() as session:
+        source = Source(key="kofia", name="KOFIA", base_url="https://example.com")
+        session.add(source)
+        session.commit()
+
+        monkeypatch.setattr(sync_service, "get_crawler", lambda source_key: crawler)
+
+        with pytest.raises(ValueError, match="총 페이지 수"):
+            sync_service.run_source_sync(session, source_key="kofia", start_page=2, end_page=4)
+
+        sync_run = session.query(JobSyncRun).one()
+        assert sync_run.status == "failed"
+        assert "총 페이지 수" in (sync_run.message or "")
+        assert crawler.closed is True

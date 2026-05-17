@@ -1,12 +1,11 @@
 import Link from "next/link";
 
-import { syncSourceAction } from "@/app/actions";
 import { ApiUnavailable } from "@/components/ui/api-unavailable";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { SourceSyncControls } from "@/components/ui/source-sync-controls";
 import {
   pageBodyStyle,
-  primaryButtonStyle,
   sectionTitleStyle,
   tdStyle,
   thStyle,
@@ -85,7 +84,7 @@ export default async function Home() {
                   <th style={{ ...thStyle, textAlign: "center" }}>상태</th>
                   <th style={{ ...thStyle, textAlign: "right" }}>누적 공고</th>
                   <th style={thStyle}>마지막 동기화</th>
-                  <th style={{ ...thStyle, textAlign: "right", width: 200 }}>액션</th>
+                  <th style={{ ...thStyle, textAlign: "right", width: 320 }}>액션</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,13 +121,7 @@ export default async function Home() {
                       {formatDateTime(source.last_synced_at)}
                     </td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <form action={syncSourceAction} style={{ display: "inline-flex", gap: 6 }}>
-                        <input type="hidden" name="sourceKey" value={source.key} />
-                        <input type="hidden" name="pageLimit" value="1" />
-                        <button type="submit" style={primaryButtonStyle}>
-                          1페이지 동기화
-                        </button>
-                      </form>
+                      <SourceSyncControls sourceKey={source.key} />
                     </td>
                   </tr>
                 ))}
