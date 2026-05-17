@@ -1,0 +1,12 @@
+node_modules
+.pnpm-store
+.DS_Store
+.env
+.venv
+__pycache__
+.pytest_cache
+*.pyc
+apps/api/.venv
+apps/web/.next
+data/*.db
+data/*.db-*

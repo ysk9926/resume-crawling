@@ -1,0 +1,19 @@
+{
+  "name": "resume-workbench",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "bootstrap": "pnpm install && pnpm bootstrap:api",
+    "bootstrap:api": "uv sync --project apps/api",
+    "dev": "concurrently --kill-others-on-fail -n web,api -c \"#0f766e,#1d4ed8\" \"pnpm dev:web\" \"pnpm dev:api\"",
+    "dev:web": "pnpm --dir apps/web dev",
+    "dev:api": "uv run --directory apps/api uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",
+    "lint": "pnpm --dir apps/web lint",
+    "typecheck": "pnpm --dir apps/web exec tsc --noEmit",
+    "api:test": "uv run --directory apps/api pytest",
+    "api:sync": "uv run --directory apps/api python -m app.scripts.sync_source"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
