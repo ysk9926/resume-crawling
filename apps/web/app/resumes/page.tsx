@@ -11,8 +11,6 @@ import {
 import { getResumes } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 
-export const dynamic = "force-dynamic";
-
 const defaultMarkdown = `# 이름 / 연락처
 - 이메일:
 - GitHub:

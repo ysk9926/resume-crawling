@@ -15,8 +15,6 @@ import { getApplications } from "@/lib/api";
 import { formatDateTime, toInputDate } from "@/lib/format";
 import { getApplicationStatusLabel } from "@/lib/status-labels";
 
-export const dynamic = "force-dynamic";
-
 function toneForStatus(status: string): "neutral" | "info" | "success" | "warning" | "danger" {
   if (status === "offer") return "success";
   if (status === "applied" || status === "document_passed" || status === "interview") return "info";

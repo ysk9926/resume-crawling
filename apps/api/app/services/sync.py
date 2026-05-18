@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.crawlers.base import CrawledJobPosting
 from app.crawlers.registry import get_crawler
 from app.models import Application, JobPosting, JobSyncRun, ResumeTemplate, Source, utcnow
+from app.services.cache import invalidate_read_caches
 
 
 def upsert_postings(
@@ -103,6 +104,7 @@ def run_source_sync(session: Session, source_key: str, start_page: int, end_page
         sync_run.finished_at = utcnow()
         session.commit()
         session.refresh(sync_run)
+        invalidate_read_caches()
         return sync_run
     except ValueError as exc:
         session.rollback()
@@ -113,6 +115,7 @@ def run_source_sync(session: Session, source_key: str, start_page: int, end_page
             failed_run.finished_at = utcnow()
             session.commit()
             session.refresh(failed_run)
+            invalidate_read_caches()
         raise
     except Exception as exc:
         session.rollback()
@@ -123,6 +126,7 @@ def run_source_sync(session: Session, source_key: str, start_page: int, end_page
             failed_run.finished_at = utcnow()
             session.commit()
             session.refresh(failed_run)
+            invalidate_read_caches()
             return failed_run
         raise
     finally:
@@ -170,6 +174,7 @@ def create_or_replace_application(
 
     session.commit()
     session.refresh(application)
+    invalidate_read_caches()
     return application
 
 
@@ -193,4 +198,5 @@ def update_application_snapshot(
     application.resume_snapshot_markdown = resume_snapshot_markdown
     session.commit()
     session.refresh(application)
+    invalidate_read_caches()
     return application

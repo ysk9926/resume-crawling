@@ -4,10 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import CRAWL_INFO_CACHE_TTL_SECONDS, LOOKUP_CACHE_TTL_SECONDS
 from app.crawlers.registry import get_crawler
 from app.database import get_db
 from app.models import JobPosting, Source
 from app.schemas import JobSyncRunOut, SourceCrawlInfoOut, SourceSummary, SyncRequest
+from app.services.cache import get_read_cache_value
 from app.services.sync import run_source_sync
 
 
@@ -16,30 +18,11 @@ router = APIRouter(prefix="/sources", tags=["sources"])
 
 @router.get("", response_model=list[SourceSummary])
 def list_sources(db: Session = Depends(get_db)) -> list[SourceSummary]:
-    postings_count_subquery = (
-        select(JobPosting.source_id, func.count(JobPosting.id).label("posting_count"))
-        .group_by(JobPosting.source_id)
-        .subquery()
+    return get_read_cache_value(
+        "sources:list",
+        LOOKUP_CACHE_TTL_SECONDS,
+        lambda: load_sources(db),
     )
-
-    rows = db.execute(
-        select(Source, func.coalesce(postings_count_subquery.c.posting_count, 0))
-        .outerjoin(postings_count_subquery, Source.id == postings_count_subquery.c.source_id)
-        .order_by(Source.name.asc())
-    ).all()
-
-    return [
-        SourceSummary(
-            id=source.id,
-            key=source.key,
-            name=source.name,
-            base_url=source.base_url,
-            is_enabled=source.is_enabled,
-            last_synced_at=source.last_synced_at,
-            posting_count=posting_count,
-        )
-        for source, posting_count in rows
-    ]
 
 
 @router.post("/{source_key}/sync", response_model=JobSyncRunOut)
@@ -66,6 +49,41 @@ def sync_source(
 
 @router.get("/{source_key}/crawl-info", response_model=SourceCrawlInfoOut)
 def get_source_crawl_info(source_key: str) -> SourceCrawlInfoOut:
+    return get_read_cache_value(
+        f"source-crawl-info:{source_key}",
+        CRAWL_INFO_CACHE_TTL_SECONDS,
+        lambda: load_source_crawl_info(source_key),
+    )
+
+
+def load_sources(db: Session) -> list[SourceSummary]:
+    postings_count_subquery = (
+        select(JobPosting.source_id, func.count(JobPosting.id).label("posting_count"))
+        .group_by(JobPosting.source_id)
+        .subquery()
+    )
+
+    rows = db.execute(
+        select(Source, func.coalesce(postings_count_subquery.c.posting_count, 0))
+        .outerjoin(postings_count_subquery, Source.id == postings_count_subquery.c.source_id)
+        .order_by(Source.name.asc())
+    ).all()
+
+    return [
+        SourceSummary(
+            id=source.id,
+            key=source.key,
+            name=source.name,
+            base_url=source.base_url,
+            is_enabled=source.is_enabled,
+            last_synced_at=source.last_synced_at,
+            posting_count=posting_count,
+        )
+        for source, posting_count in rows
+    ]
+
+
+def load_source_crawl_info(source_key: str) -> SourceCrawlInfoOut:
     try:
         crawler = get_crawler(source_key)
     except KeyError as exc:

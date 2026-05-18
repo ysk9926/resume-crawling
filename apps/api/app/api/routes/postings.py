@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+from math import ceil
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, desc, or_, select
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import LIST_CACHE_TTL_SECONDS
 from app.database import get_db
-from app.models import JobPosting
-from app.schemas import JobPostingOut, JobPostingUpdate
+from app.models import JobPosting, Source
+from app.schemas import (
+    JobPostingOut,
+    JobPostingUpdate,
+    PaginatedJobPostingOut,
+    PostingOverviewOut,
+)
+from app.services.cache import get_read_cache_value, invalidate_read_caches, make_cache_key
 
 
 router = APIRouter(prefix="/postings", tags=["postings"])
+PostingTabKey = Literal["all", "new", "interesting", "ignored", "bookmarked", "todo"]
 
 
 def resolve_posting_flags(
@@ -88,7 +99,7 @@ def list_postings(
     if curation_status:
         filters.append(JobPosting.curation_status == curation_status)
     if source_key:
-        filters.append(JobPosting.source.has(key=source_key))
+        filters.append(Source.key == source_key)
     if bookmarked is not None:
         filters.append(JobPosting.is_bookmarked == bookmarked)
     if todo is not None:
@@ -97,13 +108,220 @@ def list_postings(
     if filters:
         statement = statement.where(and_(*filters))
 
-    statement = statement.order_by(
-        desc(JobPosting.posted_at),
-        desc(JobPosting.created_at),
+    postings = db.scalars(
+        statement.order_by(
+            desc(JobPosting.posted_at),
+            desc(JobPosting.created_at),
+        )
+    ).all()
+    return [serialize_posting(posting) for posting in postings]
+
+
+@router.get("/overview", response_model=PostingOverviewOut)
+def get_postings_overview(
+    q: str | None = Query(default=None),
+    source_key: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> PostingOverviewOut:
+    cache_key = make_cache_key(
+        "postings:overview:",
+        q=q,
+        source_key=source_key,
+    )
+    return get_read_cache_value(
+        cache_key,
+        LIST_CACHE_TTL_SECONDS,
+        lambda: load_postings_overview(db, q, source_key),
     )
 
-    postings = db.scalars(statement).all()
-    return [serialize_posting(posting) for posting in postings]
+
+@router.get("/all", response_model=PaginatedJobPostingOut)
+def list_all_postings(
+    q: str | None = Query(default=None),
+    source_key: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> PaginatedJobPostingOut:
+    return load_cached_postings_page(db, "all", q, source_key, page, page_size)
+
+
+@router.get("/new", response_model=PaginatedJobPostingOut)
+def list_new_postings(
+    q: str | None = Query(default=None),
+    source_key: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> PaginatedJobPostingOut:
+    return load_cached_postings_page(db, "new", q, source_key, page, page_size)
+
+
+@router.get("/interesting", response_model=PaginatedJobPostingOut)
+def list_interesting_postings(
+    q: str | None = Query(default=None),
+    source_key: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> PaginatedJobPostingOut:
+    return load_cached_postings_page(db, "interesting", q, source_key, page, page_size)
+
+
+@router.get("/ignored", response_model=PaginatedJobPostingOut)
+def list_ignored_postings(
+    q: str | None = Query(default=None),
+    source_key: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> PaginatedJobPostingOut:
+    return load_cached_postings_page(db, "ignored", q, source_key, page, page_size)
+
+
+@router.get("/bookmarked", response_model=PaginatedJobPostingOut)
+def list_bookmarked_postings(
+    q: str | None = Query(default=None),
+    source_key: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> PaginatedJobPostingOut:
+    return load_cached_postings_page(db, "bookmarked", q, source_key, page, page_size)
+
+
+@router.get("/todo", response_model=PaginatedJobPostingOut)
+def list_todo_postings(
+    q: str | None = Query(default=None),
+    source_key: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> PaginatedJobPostingOut:
+    return load_cached_postings_page(db, "todo", q, source_key, page, page_size)
+
+
+def load_cached_postings_page(
+    db: Session,
+    tab: PostingTabKey,
+    q: str | None,
+    source_key: str | None,
+    page: int,
+    page_size: int,
+) -> PaginatedJobPostingOut:
+    cache_key = make_cache_key(
+        f"postings:{tab}:",
+        q=q,
+        source_key=source_key,
+        page=page,
+        page_size=page_size,
+    )
+    return get_read_cache_value(
+        cache_key,
+        LIST_CACHE_TTL_SECONDS,
+        lambda: load_postings_page(db, tab, q, source_key, page, page_size),
+    )
+
+
+def load_postings_overview(
+    db: Session,
+    q: str | None,
+    source_key: str | None,
+) -> PostingOverviewOut:
+    return PostingOverviewOut(
+        all=count_postings(db, build_posting_filters("all", q, source_key)),
+        new=count_postings(db, build_posting_filters("new", q, source_key)),
+        interesting=count_postings(db, build_posting_filters("interesting", q, source_key)),
+        ignored=count_postings(db, build_posting_filters("ignored", q, source_key)),
+        bookmarked=count_postings(db, build_posting_filters("bookmarked", q, source_key)),
+        todo=count_postings(db, build_posting_filters("todo", q, source_key)),
+    )
+
+
+def load_postings_page(
+    db: Session,
+    tab: PostingTabKey,
+    q: str | None,
+    source_key: str | None,
+    page: int,
+    page_size: int,
+) -> PaginatedJobPostingOut:
+    filters = build_posting_filters(tab, q, source_key)
+    total_count = count_postings(db, filters)
+    total_pages = max(1, ceil(total_count / page_size)) if total_count else 1
+    resolved_page = min(page, total_pages)
+    offset = (resolved_page - 1) * page_size
+
+    statement = (
+        select(JobPosting)
+        .options(
+            joinedload(JobPosting.source),
+            joinedload(JobPosting.application),
+        )
+        .join(JobPosting.source)
+    )
+    if filters:
+        statement = statement.where(and_(*filters))
+
+    postings = db.scalars(
+        statement.order_by(
+            desc(JobPosting.posted_at),
+            desc(JobPosting.created_at),
+        )
+        .offset(offset)
+        .limit(page_size)
+    ).all()
+
+    return PaginatedJobPostingOut(
+        items=[serialize_posting(posting) for posting in postings],
+        page=resolved_page,
+        page_size=page_size,
+        total_count=total_count,
+        total_pages=total_pages,
+        has_prev=resolved_page > 1,
+        has_next=resolved_page < total_pages,
+    )
+
+
+def count_postings(db: Session, filters: list[object]) -> int:
+    statement = select(func.count(JobPosting.id)).select_from(JobPosting).join(JobPosting.source)
+    if filters:
+        statement = statement.where(and_(*filters))
+    return db.scalar(statement) or 0
+
+
+def build_posting_filters(
+    tab: PostingTabKey,
+    q: str | None,
+    source_key: str | None,
+) -> list[object]:
+    filters: list[object] = []
+
+    if q:
+        wildcard = f"%{q.strip()}%"
+        filters.append(
+            or_(
+                JobPosting.title.ilike(wildcard),
+                JobPosting.company_name.ilike(wildcard),
+                JobPosting.normalized_content.ilike(wildcard),
+            )
+        )
+
+    if source_key:
+        filters.append(Source.key == source_key)
+
+    if tab == "new":
+        filters.append(JobPosting.curation_status == "new")
+    elif tab == "interesting":
+        filters.append(JobPosting.curation_status == "interesting")
+    elif tab == "ignored":
+        filters.append(JobPosting.curation_status == "ignored")
+    elif tab == "bookmarked":
+        filters.append(JobPosting.is_bookmarked.is_(True))
+    elif tab == "todo":
+        filters.append(JobPosting.is_todo.is_(True))
+
+    return filters
 
 
 @router.patch("/{posting_id}", response_model=JobPostingOut)
@@ -132,4 +350,5 @@ def update_posting(
     )
     db.commit()
     db.refresh(posting)
+    invalidate_read_caches()
     return serialize_posting(posting)

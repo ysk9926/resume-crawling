@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -37,7 +37,10 @@ class Source(Base):
 
 class JobPosting(Base):
     __tablename__ = "job_postings"
-    __table_args__ = (UniqueConstraint("source_id", "external_id", name="uq_job_source_external_id"),)
+    __table_args__ = (
+        UniqueConstraint("source_id", "external_id", name="uq_job_source_external_id"),
+        Index("ix_job_postings_posted_created", "posted_at", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"), index=True)
@@ -72,6 +75,7 @@ class JobPosting(Base):
 
 class ResumeTemplate(Base):
     __tablename__ = "resume_templates"
+    __table_args__ = (Index("ix_resume_templates_updated_at", "updated_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(160))
@@ -85,6 +89,7 @@ class ResumeTemplate(Base):
 
 class Application(Base):
     __tablename__ = "applications"
+    __table_args__ = (Index("ix_applications_updated_at", "updated_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     job_posting_id: Mapped[int] = mapped_column(ForeignKey("job_postings.id"), unique=True, index=True)
@@ -103,6 +108,7 @@ class Application(Base):
 
 class JobSyncRun(Base):
     __tablename__ = "job_sync_runs"
+    __table_args__ = (Index("ix_job_sync_runs_started_at", "started_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"), index=True)

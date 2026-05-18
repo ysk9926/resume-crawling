@@ -18,8 +18,6 @@ import {
   getPostingCurationLabel,
 } from "@/lib/status-labels";
 
-export const dynamic = "force-dynamic";
-
 function statusTone(status: string): "neutral" | "info" | "success" | "warning" | "danger" {
   if (status === "success" || status === "interesting" || status === "offer") {
     return "success";

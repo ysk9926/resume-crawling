@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
+from app.config import LOOKUP_CACHE_TTL_SECONDS
 from app.database import get_db
 from app.models import ResumeTemplate
 from app.schemas import ResumeTemplateCreate, ResumeTemplateOut, ResumeTemplateUpdate
+from app.services.cache import get_read_cache_value, invalidate_read_caches
 
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
@@ -14,6 +16,14 @@ router = APIRouter(prefix="/resumes", tags=["resumes"])
 
 @router.get("", response_model=list[ResumeTemplateOut])
 def list_resumes(db: Session = Depends(get_db)) -> list[ResumeTemplateOut]:
+    return get_read_cache_value(
+        "resumes:list",
+        LOOKUP_CACHE_TTL_SECONDS,
+        lambda: load_resumes(db),
+    )
+
+
+def load_resumes(db: Session) -> list[ResumeTemplateOut]:
     resumes = db.scalars(
         select(ResumeTemplate).order_by(desc(ResumeTemplate.updated_at))
     ).all()
@@ -33,6 +43,7 @@ def create_resume(
     db.add(resume)
     db.commit()
     db.refresh(resume)
+    invalidate_read_caches()
     return ResumeTemplateOut.model_validate(resume)
 
 
@@ -51,4 +62,5 @@ def update_resume(
     resume.markdown_content = payload.markdown_content
     db.commit()
     db.refresh(resume)
+    invalidate_read_caches()
     return ResumeTemplateOut.model_validate(resume)

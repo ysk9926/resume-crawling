@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
 import {
+  CACHE_TAGS,
   createApplication,
   createResume,
   getSourceCrawlInfo,
@@ -27,11 +28,25 @@ function revalidateAll() {
   revalidatePath("/applications");
 }
 
+function updateTags(tags: string[]) {
+  for (const tag of tags) {
+    updateTag(tag);
+  }
+}
+
 export async function syncSourceAction(formData: FormData) {
   const sourceKey = String(formData.get("sourceKey") ?? "");
   const startPage = parseRequiredNumber(formData.get("startPage"), "startPage");
   const endPage = parseRequiredNumber(formData.get("endPage"), "endPage");
   await postSyncSource(sourceKey, startPage, endPage);
+  updateTags([
+    CACHE_TAGS.dashboard,
+    CACHE_TAGS.sources,
+    CACHE_TAGS.postings,
+    CACHE_TAGS.applications,
+    CACHE_TAGS.sourceCrawlInfo,
+    `${CACHE_TAGS.sourceCrawlInfo}:${sourceKey}`,
+  ]);
   revalidateAll();
 }
 
@@ -45,6 +60,14 @@ export async function syncSourceRangeAction(input: {
   endPage: number;
 }) {
   const syncRun = await postSyncSource(input.sourceKey, input.startPage, input.endPage);
+  updateTags([
+    CACHE_TAGS.dashboard,
+    CACHE_TAGS.sources,
+    CACHE_TAGS.postings,
+    CACHE_TAGS.applications,
+    CACHE_TAGS.sourceCrawlInfo,
+    `${CACHE_TAGS.sourceCrawlInfo}:${input.sourceKey}`,
+  ]);
   revalidateAll();
   return syncRun;
 }
@@ -57,6 +80,7 @@ export async function updatePostingCurationAction(formData: FormData) {
     curation_status: curationStatus,
     curation_note: curationNote,
   });
+  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings]);
   revalidateAll();
 }
 
@@ -64,6 +88,7 @@ export async function togglePostingBookmarkAction(formData: FormData) {
   const postingId = parseRequiredNumber(formData.get("postingId"), "postingId");
   const next = String(formData.get("nextBookmarked") ?? "1") === "1";
   await patchPosting(postingId, { is_bookmarked: next });
+  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings]);
   revalidateAll();
 }
 
@@ -71,6 +96,7 @@ export async function togglePostingTodoAction(formData: FormData) {
   const postingId = parseRequiredNumber(formData.get("postingId"), "postingId");
   const next = String(formData.get("nextTodo") ?? "1") === "1";
   await patchPosting(postingId, { is_todo: next });
+  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings]);
   revalidateAll();
 }
 
@@ -80,6 +106,7 @@ export async function createResumeAction(formData: FormData) {
     summary: String(formData.get("summary") ?? ""),
     markdown_content: String(formData.get("markdownContent") ?? ""),
   });
+  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.resumes, CACHE_TAGS.applications]);
   revalidateAll();
 }
 
@@ -90,6 +117,7 @@ export async function updateResumeAction(formData: FormData) {
     summary: String(formData.get("summary") ?? ""),
     markdown_content: String(formData.get("markdownContent") ?? ""),
   });
+  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.resumes, CACHE_TAGS.applications]);
   revalidateAll();
 }
 
@@ -102,6 +130,7 @@ export async function createApplicationAction(formData: FormData) {
     status: String(formData.get("status") ?? "planned"),
     note: String(formData.get("note") ?? ""),
   });
+  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings, CACHE_TAGS.applications]);
   revalidateAll();
 }
 
@@ -115,5 +144,6 @@ export async function updateApplicationAction(formData: FormData) {
     resume_snapshot_title: String(formData.get("resumeSnapshotTitle") ?? ""),
     resume_snapshot_markdown: String(formData.get("resumeSnapshotMarkdown") ?? ""),
   });
+  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings, CACHE_TAGS.applications]);
   revalidateAll();
 }

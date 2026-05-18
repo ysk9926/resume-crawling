@@ -51,6 +51,35 @@ export type JobPosting = {
   application_status: string | null;
 };
 
+export type PostingTabKey =
+  | "all"
+  | "new"
+  | "interesting"
+  | "ignored"
+  | "bookmarked"
+  | "todo";
+
+export type PostingOverview = {
+  all: number;
+  new: number;
+  interesting: number;
+  ignored: number;
+  bookmarked: number;
+  todo: number;
+};
+
+export type PaginatedResponse<T> = {
+  items: T[];
+  page: number;
+  page_size: number;
+  total_count: number;
+  total_pages: number;
+  has_prev: boolean;
+  has_next: boolean;
+};
+
+export type JobPostingPage = PaginatedResponse<JobPosting>;
+
 export type ResumeTemplate = {
   id: number;
   title: string;

@@ -31,6 +31,22 @@ def _ensure_sqlite_columns() -> None:
             connection.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_job_postings_is_todo ON job_postings (is_todo)"
             )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_job_postings_posted_created "
+            "ON job_postings (posted_at, created_at)"
+        )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_applications_updated_at "
+            "ON applications (updated_at)"
+        )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_resume_templates_updated_at "
+            "ON resume_templates (updated_at)"
+        )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_job_sync_runs_started_at "
+            "ON job_sync_runs (started_at)"
+        )
 
 
 @asynccontextmanager

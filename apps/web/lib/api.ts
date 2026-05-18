@@ -1,7 +1,9 @@
 import type {
   Application,
   Dashboard,
+  JobPostingPage,
   JobPosting,
+  PostingOverview,
   ResumeTemplate,
   SourceCrawlInfo,
   SourceSummary,
@@ -9,6 +11,14 @@ import type {
 } from "@/lib/types";
 
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
+const CACHE_TAGS = {
+  dashboard: "dashboard",
+  postings: "postings",
+  sources: "sources",
+  resumes: "resumes",
+  applications: "applications",
+  sourceCrawlInfo: "source-crawl-info",
+} as const;
 
 type RequestOptions = RequestInit & {
   bodyJson?: unknown;
@@ -16,9 +26,11 @@ type RequestOptions = RequestInit & {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { bodyJson, headers, ...init } = options;
+  const method = (init.method ?? "GET").toUpperCase();
+  const isReadRequest = method === "GET";
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    cache: "no-store",
+    cache: isReadRequest ? (init.cache ?? "force-cache") : "no-store",
     headers: {
       "Content-Type": "application/json",
       ...headers,
@@ -35,11 +47,70 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export async function getDashboard(): Promise<Dashboard> {
-  return request<Dashboard>("/api/dashboard");
+  return request<Dashboard>("/api/dashboard", {
+    next: {
+      revalidate: 30,
+      tags: [CACHE_TAGS.dashboard],
+    },
+  });
 }
 
 export async function getSources(): Promise<SourceSummary[]> {
-  return request<SourceSummary[]>("/api/sources");
+  return request<SourceSummary[]>("/api/sources", {
+    next: {
+      revalidate: 60,
+      tags: [CACHE_TAGS.sources],
+    },
+  });
+}
+
+type PostingPageFilters = {
+  q?: string;
+  source_key?: string;
+  page?: number;
+  page_size?: number;
+};
+
+function buildSearchSuffix(params: Record<string, string | number | boolean | undefined>) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === "") {
+      continue;
+    }
+    search.set(key, String(value));
+  }
+  return search.size > 0 ? `?${search.toString()}` : "";
+}
+
+async function getPostingPage(path: string, filters?: PostingPageFilters): Promise<JobPostingPage> {
+  const suffix = buildSearchSuffix({
+    q: filters?.q,
+    source_key: filters?.source_key,
+    page: filters?.page,
+    page_size: filters?.page_size,
+  });
+  return request<JobPostingPage>(`${path}${suffix}`, {
+    next: {
+      revalidate: 30,
+      tags: [CACHE_TAGS.postings],
+    },
+  });
+}
+
+export async function getPostingOverview(filters?: {
+  q?: string;
+  source_key?: string;
+}): Promise<PostingOverview> {
+  const suffix = buildSearchSuffix({
+    q: filters?.q,
+    source_key: filters?.source_key,
+  });
+  return request<PostingOverview>(`/api/postings/overview${suffix}`, {
+    next: {
+      revalidate: 30,
+      tags: [CACHE_TAGS.postings],
+    },
+  });
 }
 
 export async function getPostings(filters?: {
@@ -49,27 +120,74 @@ export async function getPostings(filters?: {
   bookmarked?: boolean;
   todo?: boolean;
 }): Promise<JobPosting[]> {
-  const search = new URLSearchParams();
-  if (filters?.q) search.set("q", filters.q);
-  if (filters?.curation_status) search.set("curation_status", filters.curation_status);
-  if (filters?.source_key) search.set("source_key", filters.source_key);
-  if (filters?.bookmarked !== undefined) search.set("bookmarked", filters.bookmarked ? "true" : "false");
-  if (filters?.todo !== undefined) search.set("todo", filters.todo ? "true" : "false");
-  const suffix = search.size > 0 ? `?${search.toString()}` : "";
-  return request<JobPosting[]>(`/api/postings${suffix}`);
+  const suffix = buildSearchSuffix({
+    q: filters?.q,
+    curation_status: filters?.curation_status,
+    source_key: filters?.source_key,
+    bookmarked:
+      filters?.bookmarked !== undefined ? (filters.bookmarked ? "true" : "false") : undefined,
+    todo: filters?.todo !== undefined ? (filters.todo ? "true" : "false") : undefined,
+  });
+  return request<JobPosting[]>(`/api/postings${suffix}`, {
+    next: {
+      revalidate: 30,
+      tags: [CACHE_TAGS.postings],
+    },
+  });
+}
+
+export async function getAllPostingsPage(filters?: PostingPageFilters): Promise<JobPostingPage> {
+  return getPostingPage("/api/postings/all", filters);
+}
+
+export async function getNewPostingsPage(filters?: PostingPageFilters): Promise<JobPostingPage> {
+  return getPostingPage("/api/postings/new", filters);
+}
+
+export async function getInterestingPostingsPage(filters?: PostingPageFilters): Promise<JobPostingPage> {
+  return getPostingPage("/api/postings/interesting", filters);
+}
+
+export async function getIgnoredPostingsPage(filters?: PostingPageFilters): Promise<JobPostingPage> {
+  return getPostingPage("/api/postings/ignored", filters);
+}
+
+export async function getBookmarkedPostingsPage(filters?: PostingPageFilters): Promise<JobPostingPage> {
+  return getPostingPage("/api/postings/bookmarked", filters);
+}
+
+export async function getTodoPostingsPage(filters?: PostingPageFilters): Promise<JobPostingPage> {
+  return getPostingPage("/api/postings/todo", filters);
 }
 
 export async function getResumes(): Promise<ResumeTemplate[]> {
-  return request<ResumeTemplate[]>("/api/resumes");
+  return request<ResumeTemplate[]>("/api/resumes", {
+    next: {
+      revalidate: 60,
+      tags: [CACHE_TAGS.resumes],
+    },
+  });
 }
 
 export async function getApplications(): Promise<Application[]> {
-  return request<Application[]>("/api/applications");
+  return request<Application[]>("/api/applications", {
+    next: {
+      revalidate: 30,
+      tags: [CACHE_TAGS.applications],
+    },
+  });
 }
 
 export async function getSourceCrawlInfo(sourceKey: string): Promise<SourceCrawlInfo> {
-  return request<SourceCrawlInfo>(`/api/sources/${sourceKey}/crawl-info`);
+  return request<SourceCrawlInfo>(`/api/sources/${sourceKey}/crawl-info`, {
+    next: {
+      revalidate: 15,
+      tags: [CACHE_TAGS.sourceCrawlInfo, `${CACHE_TAGS.sourceCrawlInfo}:${sourceKey}`],
+    },
+  });
 }
+
+export { CACHE_TAGS };
 
 export async function postSyncSource(sourceKey: string, startPage: number, endPage: number): Promise<SyncRun> {
   return request<SyncRun>(`/api/sources/${sourceKey}/sync`, {

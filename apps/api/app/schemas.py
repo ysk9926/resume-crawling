@@ -82,6 +82,25 @@ class JobPostingOut(BaseModel):
     application_status: str | None = None
 
 
+class PostingOverviewOut(BaseModel):
+    all: int
+    new: int
+    interesting: int
+    ignored: int
+    bookmarked: int
+    todo: int
+
+
+class PaginatedJobPostingOut(BaseModel):
+    items: list[JobPostingOut]
+    page: int
+    page_size: int
+    total_count: int
+    total_pages: int
+    has_prev: bool
+    has_next: bool
+
+
 class ResumeTemplateCreate(BaseModel):
     title: str
     summary: str = ""

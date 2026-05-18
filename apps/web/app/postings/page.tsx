@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import {
   createApplicationAction,
   updatePostingCurationAction,
@@ -8,6 +10,7 @@ import { ApiUnavailable } from "@/components/ui/api-unavailable";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import {
+  ghostLinkStyle,
   inputStyle,
   pageBodyStyle,
   primaryButtonStyle,
@@ -15,23 +18,50 @@ import {
   textareaStyle,
 } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { getPostings, getResumes, getSources } from "@/lib/api";
-import type { JobPosting, ResumeTemplate } from "@/lib/types";
+import {
+  getAllPostingsPage,
+  getBookmarkedPostingsPage,
+  getIgnoredPostingsPage,
+  getInterestingPostingsPage,
+  getNewPostingsPage,
+  getPostingOverview,
+  getResumes,
+  getSources,
+  getTodoPostingsPage,
+} from "@/lib/api";
+import type {
+  JobPosting,
+  JobPostingPage,
+  PostingOverview,
+  PostingTabKey,
+  ResumeTemplate,
+} from "@/lib/types";
 import { formatDate, shorten } from "@/lib/format";
 import {
   getApplicationStatusLabel,
   getPostingCurationLabel,
 } from "@/lib/status-labels";
 
-export const dynamic = "force-dynamic";
+const PAGE_SIZE = 25;
+const POSTING_TABS: Array<{
+  key: PostingTabKey;
+  label: string;
+  badgeTone?: "neutral" | "info" | "success" | "warning" | "danger";
+}> = [
+  { key: "all", label: "전체" },
+  { key: "new", label: "검토 전" },
+  { key: "interesting", label: "관심", badgeTone: "success" },
+  { key: "ignored", label: "제외", badgeTone: "danger" },
+  { key: "bookmarked", label: "찜", badgeTone: "success" },
+  { key: "todo", label: "작성예정", badgeTone: "warning" },
+];
 
 type PageProps = {
   searchParams: Promise<{
     q?: string;
-    curation?: string;
     source?: string;
-    bookmarked?: string;
-    todo?: string;
+    tab?: string;
+    page?: string;
   }>;
 };
 
@@ -44,42 +74,48 @@ function toneForStatus(status: string): "neutral" | "info" | "success" | "warnin
 
 export default async function PostingsPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const q = params.q ?? "";
-  const curation = params.curation ?? "";
+  const q = params.q?.trim() ?? "";
   const source = params.source ?? "";
-  const bookmarkedOnly = params.bookmarked === "1";
-  const todoOnly = params.todo === "1";
+  const tab = parsePostingTab(params.tab);
+  const page = parsePageNumber(params.page);
 
-  const [postings, resumes, sources] = await Promise.all([
-    getPostings({
+  const filters = {
+    q: q || undefined,
+    source_key: source || undefined,
+    page,
+    page_size: PAGE_SIZE,
+  };
+
+  const [overview, postingsPage, resumes, sources] = await Promise.all([
+    getPostingOverview({
       q: q || undefined,
-      curation_status: curation || undefined,
       source_key: source || undefined,
-      bookmarked: bookmarkedOnly ? true : undefined,
-      todo: todoOnly ? true : undefined,
     }).catch(() => null),
+    getPostingPageForTab(tab, filters).catch(() => null),
     getResumes().catch(() => null),
     getSources().catch(() => null),
   ]);
 
-  if (!postings || !resumes || !sources) {
+  if (!overview || !postingsPage || !resumes || !sources) {
     return <ApiUnavailable />;
   }
 
   const counts = {
-    total: postings.length,
-    todo: postings.filter((p) => p.is_todo).length,
-    new: postings.filter((p) => p.curation_status === "new").length,
-    interesting: postings.filter((p) => p.curation_status === "interesting").length,
-    ignored: postings.filter((p) => p.curation_status === "ignored").length,
-    bookmarked: postings.filter((p) => p.is_bookmarked).length,
+    total: overview.all,
+    todo: overview.todo,
+    new: overview.new,
+    interesting: overview.interesting,
+    ignored: overview.ignored,
+    bookmarked: overview.bookmarked,
   };
+  const activeTab = POSTING_TABS.find((item) => item.key === tab) ?? POSTING_TABS[0];
+  const resetHref = buildPostingsHref({ tab });
 
   return (
     <>
       <PageHeader
         title="수집 공고"
-        description="원문을 수집한 뒤 상태·메모·지원 여부를 정제합니다."
+        description="탭별 전용 조회 API와 서버 페이지네이션으로 공고를 정제합니다."
         stats={[
           { label: "전체", value: counts.total },
           { label: "작성예정", value: counts.todo, tone: "accent" },
@@ -88,6 +124,16 @@ export default async function PostingsPage({ searchParams }: PageProps) {
           { label: "관심", value: counts.interesting, tone: "accent" },
           { label: "제외", value: counts.ignored, tone: "muted" },
         ]}
+        action={
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 10, color: "var(--rw-muted)", textTransform: "uppercase" }}>
+              현재 탭
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 700 }}>
+              {activeTab.label} · {postingsPage.total_count.toLocaleString()}건
+            </span>
+          </div>
+        }
       />
 
       <form
@@ -102,18 +148,14 @@ export default async function PostingsPage({ searchParams }: PageProps) {
           flexShrink: 0,
         }}
       >
+        <input type="hidden" name="tab" value={tab} />
+        <input type="hidden" name="page" value="1" />
         <input
           name="q"
           defaultValue={q}
           placeholder="회사명 / 제목 / 본문 키워드"
           style={{ ...inputStyle, width: 280 }}
         />
-        <select name="curation" defaultValue={curation} style={inputStyle}>
-          <option value="">모든 상태</option>
-          <option value="new">검토 전</option>
-          <option value="interesting">관심</option>
-          <option value="ignored">제외</option>
-        </select>
         <select name="source" defaultValue={source} style={inputStyle}>
           <option value="">모든 수집원</option>
           {sources.map((item) => (
@@ -122,68 +164,274 @@ export default async function PostingsPage({ searchParams }: PageProps) {
             </option>
           ))}
         </select>
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            color: "var(--rw-foreground)",
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            name="bookmarked"
-            value="1"
-            defaultChecked={bookmarkedOnly}
-          />
-          찜만 보기
-        </label>
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            color: "var(--rw-foreground)",
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            name="todo"
-            value="1"
-            defaultChecked={todoOnly}
-          />
-          작성예정만 보기
-        </label>
         <button type="submit" style={primaryButtonStyle}>
           필터 적용
         </button>
-        {q || curation || source || bookmarkedOnly || todoOnly ? (
-          <a href="/postings" style={secondaryButtonStyle}>
+        {q || source ? (
+          <Link href={resetHref} style={secondaryButtonStyle}>
             초기화
-          </a>
+          </Link>
         ) : null}
       </form>
 
+      <div
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          borderBottom: "1px solid var(--rw-border)",
+          overflowX: "auto",
+          flexShrink: 0,
+        }}
+      >
+        {POSTING_TABS.map((item) => {
+          const isActive = item.key === tab;
+          const count = getPostingTabCount(overview, item.key);
+          return (
+            <Link
+              key={item.key}
+              href={buildPostingsHref({ tab: item.key, q, source, page: 1 })}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "12px 16px",
+                borderRight: "1px solid var(--rw-border)",
+                borderBottom: isActive ? "2px solid var(--rw-accent)" : "2px solid transparent",
+                backgroundColor: isActive ? "#ffffff" : "var(--rw-table-header)",
+                color: isActive ? "var(--rw-foreground)" : "var(--rw-muted)",
+                fontSize: 12,
+                fontWeight: isActive ? 700 : 500,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span>{item.label}</span>
+              <StatusBadge label={count.toLocaleString()} tone={item.badgeTone ?? "neutral"} />
+            </Link>
+          );
+        })}
+      </div>
+
       <div style={pageBodyStyle}>
-        {postings.length === 0 ? (
+        <PaginationBar
+          page={postingsPage.page}
+          totalPages={postingsPage.total_pages}
+          totalCount={postingsPage.total_count}
+          baseHrefParams={{ tab, q, source }}
+        />
+
+        {postingsPage.items.length === 0 ? (
           <EmptyState
             title="조건에 맞는 공고가 없습니다."
-            description="검색 조건을 비우거나 먼저 대시보드에서 동기화를 실행하세요."
+            description={`${activeTab.label} 탭 조건에 맞는 공고가 없습니다.`}
           />
         ) : (
           <div>
-            {postings.map((posting) => (
+            {postingsPage.items.map((posting) => (
               <PostingRow key={posting.id} posting={posting} resumes={resumes} />
             ))}
           </div>
         )}
+
+        <PaginationBar
+          page={postingsPage.page}
+          totalPages={postingsPage.total_pages}
+          totalCount={postingsPage.total_count}
+          baseHrefParams={{ tab, q, source }}
+        />
       </div>
     </>
   );
+}
+
+function parsePostingTab(value: string | undefined): PostingTabKey {
+  if (POSTING_TABS.some((item) => item.key === value)) {
+    return value as PostingTabKey;
+  }
+  return "all";
+}
+
+function parsePageNumber(value: string | undefined): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return 1;
+  }
+  return parsed;
+}
+
+function getPostingTabCount(overview: PostingOverview, tab: PostingTabKey): number {
+  return overview[tab];
+}
+
+async function getPostingPageForTab(
+  tab: PostingTabKey,
+  filters: {
+    q?: string;
+    source_key?: string;
+    page: number;
+    page_size: number;
+  },
+): Promise<JobPostingPage> {
+  switch (tab) {
+    case "new":
+      return getNewPostingsPage(filters);
+    case "interesting":
+      return getInterestingPostingsPage(filters);
+    case "ignored":
+      return getIgnoredPostingsPage(filters);
+    case "bookmarked":
+      return getBookmarkedPostingsPage(filters);
+    case "todo":
+      return getTodoPostingsPage(filters);
+    case "all":
+    default:
+      return getAllPostingsPage(filters);
+  }
+}
+
+function buildPostingsHref(params: {
+  tab: PostingTabKey;
+  q?: string;
+  source?: string;
+  page?: number;
+}) {
+  const search = new URLSearchParams();
+  if (params.tab !== "all") {
+    search.set("tab", params.tab);
+  }
+  if (params.q) {
+    search.set("q", params.q);
+  }
+  if (params.source) {
+    search.set("source", params.source);
+  }
+  if (params.page && params.page > 1) {
+    search.set("page", String(params.page));
+  }
+
+  const suffix = search.toString();
+  return suffix ? `/postings?${suffix}` : "/postings";
+}
+
+function PaginationBar({
+  page,
+  totalPages,
+  totalCount,
+  baseHrefParams,
+}: {
+  page: number;
+  totalPages: number;
+  totalCount: number;
+  baseHrefParams: {
+    tab: PostingTabKey;
+    q?: string;
+    source?: string;
+  };
+}) {
+  if (totalCount === 0) {
+    return null;
+  }
+
+  const pages = buildPageWindow(page, totalPages);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        padding: "10px 24px",
+        borderBottom: "1px solid var(--rw-border)",
+        flexWrap: "wrap",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          color: "var(--rw-muted)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        총 {totalCount.toLocaleString()}건 · {page} / {totalPages}페이지
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        {page > 1 ? (
+          <Link
+            href={buildPostingsHref({ ...baseHrefParams, page: page - 1 })}
+            style={secondaryButtonStyle}
+          >
+            이전
+          </Link>
+        ) : (
+          <span style={{ ...ghostLinkStyle, cursor: "default" }}>이전</span>
+        )}
+
+        {pages.map((item, index) =>
+          item === "ellipsis" ? (
+            <span
+              key={`ellipsis-${index}`}
+              style={{ minWidth: 20, textAlign: "center", color: "var(--rw-muted)" }}
+            >
+              ...
+            </span>
+          ) : (
+            <Link
+              key={item}
+              href={buildPostingsHref({ ...baseHrefParams, page: item })}
+              style={{
+                ...secondaryButtonStyle,
+                minWidth: 36,
+                padding: "6px 10px",
+                backgroundColor: item === page ? "var(--rw-accent)" : "#ffffff",
+                borderColor: item === page ? "var(--rw-accent)" : "var(--rw-border)",
+                color: item === page ? "#ffffff" : "var(--rw-foreground)",
+                fontWeight: item === page ? 700 : 500,
+              }}
+            >
+              {item}
+            </Link>
+          ),
+        )}
+
+        {page < totalPages ? (
+          <Link
+            href={buildPostingsHref({ ...baseHrefParams, page: page + 1 })}
+            style={secondaryButtonStyle}
+          >
+            다음
+          </Link>
+        ) : (
+          <span style={{ ...ghostLinkStyle, cursor: "default" }}>다음</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function buildPageWindow(page: number, totalPages: number): Array<number | "ellipsis"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages: Array<number | "ellipsis"> = [1];
+  const start = Math.max(2, page - 1);
+  const end = Math.min(totalPages - 1, page + 1);
+
+  if (start > 2) {
+    pages.push("ellipsis");
+  }
+
+  for (let current = start; current <= end; current += 1) {
+    pages.push(current);
+  }
+
+  if (end < totalPages - 1) {
+    pages.push("ellipsis");
+  }
+
+  pages.push(totalPages);
+  return pages;
 }
 
 function PostingRow({
@@ -415,108 +663,108 @@ function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: Resume
           gridTemplateColumns: "1fr 1fr",
         }}
       >
-      <form
-        action={updatePostingCurationAction}
-        style={{
-          padding: "16px 24px",
-          borderRight: "1px solid var(--rw-border)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-        }}
-      >
-        <input type="hidden" name="postingId" value={posting.id} />
-        <div
+        <form
+          action={updatePostingCurationAction}
           style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: "var(--rw-muted)",
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
+            padding: "16px 24px",
+            borderRight: "1px solid var(--rw-border)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
           }}
         >
-          내부 정제
-        </div>
-        <select
-          name="curationStatus"
-          defaultValue={posting.curation_status}
-          style={inputStyle}
-        >
-          <option value="new">검토 전</option>
-          <option value="interesting">관심</option>
-          <option value="ignored">제외</option>
-        </select>
-        <textarea
-          name="curationNote"
-          rows={4}
-          defaultValue={posting.curation_note ?? ""}
-          placeholder="왜 관심 공고인지, 다음 액션이 뭔지 메모"
-          style={textareaStyle}
-        />
-        <div>
-          <button type="submit" style={primaryButtonStyle}>
-            메모 저장
-          </button>
-        </div>
-      </form>
-
-      <form
-        action={createApplicationAction}
-        style={{
-          padding: "16px 24px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-        }}
-      >
-        <input type="hidden" name="jobPostingId" value={posting.id} />
-        <input type="hidden" name="status" value="planned" />
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: "var(--rw-muted)",
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-          }}
-        >
-          지원 현황 만들기
-        </div>
-        {resumes.length === 0 ? (
+          <input type="hidden" name="postingId" value={posting.id} />
           <div
             style={{
-              padding: "12px",
-              border: "1px dashed var(--rw-border)",
-              fontSize: 12,
+              fontSize: 10,
+              fontWeight: 700,
               color: "var(--rw-muted)",
-              backgroundColor: "#fff",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
             }}
           >
-            먼저 이력서 페이지에서 템플릿을 만들어야 합니다.
+            내부 정제
           </div>
-        ) : (
-          <>
-            <select name="resumeTemplateId" defaultValue={resumes[0]?.id} style={inputStyle}>
-              {resumes.map((resume) => (
-                <option key={resume.id} value={resume.id}>
-                  {resume.title}
-                </option>
-              ))}
-            </select>
-            <textarea
-              name="note"
-              rows={4}
-              placeholder="해당 지원건의 초기 메모"
-              style={textareaStyle}
-            />
-            <div>
-              <button type="submit" style={primaryButtonStyle}>
-                스냅샷 생성
-              </button>
+          <select
+            name="curationStatus"
+            defaultValue={posting.curation_status}
+            style={inputStyle}
+          >
+            <option value="new">검토 전</option>
+            <option value="interesting">관심</option>
+            <option value="ignored">제외</option>
+          </select>
+          <textarea
+            name="curationNote"
+            rows={4}
+            defaultValue={posting.curation_note ?? ""}
+            placeholder="왜 관심 공고인지, 다음 액션이 뭔지 메모"
+            style={textareaStyle}
+          />
+          <div>
+            <button type="submit" style={primaryButtonStyle}>
+              메모 저장
+            </button>
+          </div>
+        </form>
+
+        <form
+          action={createApplicationAction}
+          style={{
+            padding: "16px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <input type="hidden" name="jobPostingId" value={posting.id} />
+          <input type="hidden" name="status" value="planned" />
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: "var(--rw-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            지원 현황 만들기
+          </div>
+          {resumes.length === 0 ? (
+            <div
+              style={{
+                padding: "12px",
+                border: "1px dashed var(--rw-border)",
+                fontSize: 12,
+                color: "var(--rw-muted)",
+                backgroundColor: "#fff",
+              }}
+            >
+              먼저 이력서 페이지에서 템플릿을 만들어야 합니다.
             </div>
-          </>
-        )}
-      </form>
+          ) : (
+            <>
+              <select name="resumeTemplateId" defaultValue={resumes[0]?.id} style={inputStyle}>
+                {resumes.map((resume) => (
+                  <option key={resume.id} value={resume.id}>
+                    {resume.title}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                name="note"
+                rows={4}
+                placeholder="해당 지원건의 초기 메모"
+                style={textareaStyle}
+              />
+              <div>
+                <button type="submit" style={primaryButtonStyle}>
+                  스냅샷 생성
+                </button>
+              </div>
+            </>
+          )}
+        </form>
       </div>
     </div>
   );

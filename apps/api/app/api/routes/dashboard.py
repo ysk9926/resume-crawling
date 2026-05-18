@@ -5,8 +5,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
+from app.config import DASHBOARD_CACHE_TTL_SECONDS
 from app.models import Application, JobPosting, JobSyncRun, ResumeTemplate, Source
 from app.schemas import ApplicationOut, DashboardOut, JobPostingOut, JobSyncRunOut, SourceSummary
+from app.services.cache import get_read_cache_value
 from .applications import serialize_application
 from .postings import serialize_posting
 
@@ -16,6 +18,14 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 @router.get("", response_model=DashboardOut)
 def get_dashboard(db: Session = Depends(get_db)) -> DashboardOut:
+    return get_read_cache_value(
+        "dashboard:summary",
+        DASHBOARD_CACHE_TTL_SECONDS,
+        lambda: load_dashboard(db),
+    )
+
+
+def load_dashboard(db: Session) -> DashboardOut:
     total_postings = db.scalar(select(func.count(JobPosting.id))) or 0
     todo_postings = db.scalar(
         select(func.count(JobPosting.id)).where(JobPosting.is_todo.is_(True))

@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import LIST_CACHE_TTL_SECONDS
 from app.database import get_db
 from app.models import Application, JobPosting
 from app.schemas import ApplicationCreate, ApplicationOut, ApplicationUpdate
+from app.services.cache import get_read_cache_value
 from app.services.sync import create_or_replace_application, update_application_snapshot
 
 
@@ -36,6 +38,14 @@ def serialize_application(application: Application) -> ApplicationOut:
 
 @router.get("", response_model=list[ApplicationOut])
 def list_applications(db: Session = Depends(get_db)) -> list[ApplicationOut]:
+    return get_read_cache_value(
+        "applications:list",
+        LIST_CACHE_TTL_SECONDS,
+        lambda: load_applications(db),
+    )
+
+
+def load_applications(db: Session) -> list[ApplicationOut]:
     applications = db.scalars(
         select(Application)
         .options(
