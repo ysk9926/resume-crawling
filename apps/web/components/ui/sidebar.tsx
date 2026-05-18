@@ -25,8 +25,8 @@ type NavItem = {
 const navigation: NavItem[] = [
   { href: "/", label: "대시보드", icon: HiOutlineChartBar },
   { href: "/postings", label: "공고", icon: HiOutlineClipboardList },
-  { href: "/postings?todo=1", label: "작성예정", icon: HiOutlineClipboardList },
-  { href: "/postings?bookmarked=1", label: "찜한 공고", icon: HiOutlineBookmark },
+  { href: "/postings?tab=todo", label: "작성예정", icon: HiOutlineClipboardList },
+  { href: "/postings?tab=bookmarked", label: "찜한 공고", icon: HiOutlineBookmark },
   { href: "/resumes", label: "이력서", icon: HiOutlineDocumentText },
   { href: "/applications", label: "지원 현황", icon: HiOutlineBriefcase },
 ];
@@ -83,17 +83,15 @@ function getCollapsed() {
 function isActive(
   itemHref: string,
   pathname: string,
-  bookmarkedParam: string | null,
-  todoParam: string | null,
+  tabParam: string | null,
 ): boolean {
   const [itemPath, itemQuery = ""] = itemHref.split("?");
   if (itemPath !== pathname) return false;
   if (itemPath === "/postings") {
     const itemParams = new URLSearchParams(itemQuery);
-    return (
-      (itemParams.get("bookmarked") ?? null) === bookmarkedParam &&
-      (itemParams.get("todo") ?? null) === todoParam
-    );
+    const itemTab = itemParams.get("tab") ?? "all";
+    const currentTab = tabParam ?? "all";
+    return itemTab === currentTab;
   }
   return true;
 }
@@ -101,8 +99,7 @@ function isActive(
 export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const bookmarkedParam = searchParams?.get("bookmarked") ?? null;
-  const todoParam = searchParams?.get("todo") ?? null;
+  const tabParam = searchParams?.get("tab") ?? null;
   const collapsed = useSyncExternalStore(
     subscribeStorage,
     getCollapsed,
@@ -189,7 +186,7 @@ export function Sidebar() {
           <NavLink
             key={item.href}
             item={item}
-            active={isActive(item.href, pathname, bookmarkedParam, todoParam)}
+            active={isActive(item.href, pathname, tabParam)}
             collapsed={collapsed}
           />
         ))}
