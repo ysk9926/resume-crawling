@@ -10,3 +10,12 @@ apps/api/.venv
 apps/web/.next
 data/*.db
 data/*.db-*
+
+# Playwright MCP / research scratch files
+.playwright-mcp/
+remember-*.yml
+remember-*.txt
+req*-body.txt
+req*-resp.json
+req*-ads-body.txt
+detail-related.json
