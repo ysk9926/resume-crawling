@@ -76,6 +76,7 @@ def load_sources(db: Session) -> list[SourceSummary]:
             name=source.name,
             base_url=source.base_url,
             is_enabled=source.is_enabled,
+            supports_sync=source.supports_sync,
             last_synced_at=source.last_synced_at,
             posting_count=posting_count,
         )

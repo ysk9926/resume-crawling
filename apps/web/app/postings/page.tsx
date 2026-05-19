@@ -4,6 +4,7 @@ import {
   createApplicationAction,
   updatePostingCurationAction,
 } from "@/app/actions";
+import { ManualPostingModal } from "@/components/applications/manual-posting-modal";
 import { BookmarkToggle } from "@/components/ui/bookmark-toggle";
 import { TodoToggle } from "@/components/ui/todo-toggle";
 import { ApiUnavailable } from "@/components/ui/api-unavailable";
@@ -114,8 +115,8 @@ export default async function PostingsPage({ searchParams }: PageProps) {
   return (
     <>
       <PageHeader
-        title="수집 공고"
-        description="탭별 전용 조회 API와 서버 페이지네이션으로 공고를 정제합니다."
+        title="공고"
+        description="크롤링 공고와 수동 등록 공고를 한 화면에서 관리합니다."
         stats={[
           { label: "전체", value: counts.total },
           { label: "작성예정", value: counts.todo, tone: "accent" },
@@ -125,13 +126,16 @@ export default async function PostingsPage({ searchParams }: PageProps) {
           { label: "제외", value: counts.ignored, tone: "muted" },
         ]}
         action={
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 10, color: "var(--rw-muted)", textTransform: "uppercase" }}>
-              현재 탭
-            </span>
-            <span style={{ fontSize: 12, fontWeight: 700 }}>
-              {activeTab.label} · {postingsPage.total_count.toLocaleString()}건
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: 10, color: "var(--rw-muted)", textTransform: "uppercase" }}>
+                현재 탭
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>
+                {activeTab.label} · {postingsPage.total_count.toLocaleString()}건
+              </span>
+            </div>
+            <ManualPostingModal />
           </div>
         }
       />
@@ -157,7 +161,7 @@ export default async function PostingsPage({ searchParams }: PageProps) {
           style={{ ...inputStyle, width: 280 }}
         />
         <select name="source" defaultValue={source} style={inputStyle}>
-          <option value="">모든 수집원</option>
+          <option value="">모든 플랫폼</option>
           {sources.map((item) => (
             <option key={item.key} value={item.key}>
               {item.name}
@@ -461,8 +465,11 @@ function PostingRow({
         <BookmarkToggle postingId={posting.id} isBookmarked={posting.is_bookmarked} />
         <div style={{ paddingTop: 2 }}>
           <div style={{ fontSize: 12, fontWeight: 600 }}>{posting.company_name}</div>
-          <div style={{ marginTop: 4 }}>
+          <div style={{ marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" }}>
             <StatusBadge label={posting.source_name} tone="neutral" />
+            {posting.ingest_kind === "manual" ? (
+              <StatusBadge label="수동" tone="warning" />
+            ) : null}
           </div>
         </div>
         <div style={{ minWidth: 0 }}>
@@ -730,7 +737,31 @@ function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: Resume
           >
             지원 현황 만들기
           </div>
-          {resumes.length === 0 ? (
+          {posting.application_id ? (
+            <div
+              style={{
+                padding: "12px",
+                border: "1px solid var(--rw-border)",
+                backgroundColor: "#fff",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div style={{ fontSize: 12, color: "var(--rw-foreground)" }}>
+                이미 지원 현황이 생성되어 있습니다.
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <StatusBadge
+                  label={getApplicationStatusLabel(posting.application_status ?? "planned")}
+                  tone="info"
+                />
+                <Link href={`/applications/${posting.application_id}`} style={secondaryButtonStyle}>
+                  지원 관리
+                </Link>
+              </div>
+            </div>
+          ) : resumes.length === 0 ? (
             <div
               style={{
                 padding: "12px",
@@ -744,6 +775,10 @@ function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: Resume
             </div>
           ) : (
             <>
+              <select name="applicationMethod" defaultValue="simple" style={inputStyle}>
+                <option value="simple">간편지원</option>
+                <option value="cover_letter">자소서 작성</option>
+              </select>
               <select name="resumeTemplateId" defaultValue={resumes[0]?.id} style={inputStyle}>
                 {resumes.map((resume) => (
                   <option key={resume.id} value={resume.id}>
@@ -759,7 +794,7 @@ function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: Resume
               />
               <div>
                 <button type="submit" style={primaryButtonStyle}>
-                  스냅샷 생성
+                  지원 현황 생성
                 </button>
               </div>
             </>

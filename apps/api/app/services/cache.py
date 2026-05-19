@@ -14,6 +14,7 @@ READ_CACHE_PREFIXES = (
     "postings:",
     "resumes:",
     "applications:",
+    "cover-letter:",
     "source-crawl-info:",
 )
 

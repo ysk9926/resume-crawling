@@ -54,9 +54,9 @@ export default async function Home() {
     <>
       <PageHeader
         title="대시보드"
-        description="로컬에 수집된 채용 공고와 지원 진행 상황을 한눈에 확인합니다."
+        description="로컬에 등록된 채용 공고와 지원 진행 상황을 한눈에 확인합니다."
         stats={[
-          { label: "수집 공고", value: dashboard.total_postings },
+          { label: "등록 공고", value: dashboard.total_postings },
           { label: "작성예정", value: dashboard.todo_postings, tone: "accent" },
           { label: "관심 공고", value: dashboard.interesting_postings, tone: "accent" },
           { label: "진행 지원", value: dashboard.active_applications },
@@ -68,15 +68,15 @@ export default async function Home() {
         {/* Sources */}
         <section>
           <div style={sectionLabelRow}>
-            <h2 style={sectionTitleStyle}>등록된 수집원</h2>
+            <h2 style={sectionTitleStyle}>등록된 플랫폼</h2>
             <span style={{ fontSize: 11, color: "var(--rw-muted)" }}>
-              크롤러는 코드로 등록하고 UI에서는 수동 동기화만 수행합니다.
+              크롤링 플랫폼과 수동 등록 플랫폼을 함께 관리합니다.
             </span>
           </div>
           {dashboard.sources.length === 0 ? (
             <EmptyState
-              title="등록된 수집원이 없습니다."
-              description="apps/api의 crawler registry에 사이트를 추가해야 합니다."
+              title="등록된 플랫폼이 없습니다."
+              description="크롤러를 등록하거나 수동 공고/지원을 추가하면 플랫폼이 생성됩니다."
             />
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -84,7 +84,7 @@ export default async function Home() {
                 <tr>
                   <th style={thStyle}>이름</th>
                   <th style={thStyle}>URL</th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>상태</th>
+                  <th style={{ ...thStyle, textAlign: "center" }}>유형</th>
                   <th style={{ ...thStyle, textAlign: "right" }}>누적 공고</th>
                   <th style={thStyle}>마지막 동기화</th>
                   <th style={{ ...thStyle, textAlign: "right", width: 320 }}>액션</th>
@@ -102,13 +102,19 @@ export default async function Home() {
                         fontSize: 11,
                       }}
                     >
-                      {source.base_url}
+                      {source.base_url || "—"}
                     </td>
                     <td style={{ ...tdStyle, textAlign: "center" }}>
-                      <StatusBadge
-                        label={source.is_enabled ? "활성" : "비활성"}
-                        tone={source.is_enabled ? "success" : "neutral"}
-                      />
+                      <div style={{ display: "flex", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
+                        <StatusBadge
+                          label={source.supports_sync ? "크롤링" : "수동"}
+                          tone={source.supports_sync ? "info" : "warning"}
+                        />
+                        <StatusBadge
+                          label={source.is_enabled ? "활성" : "비활성"}
+                          tone={source.is_enabled ? "success" : "neutral"}
+                        />
+                      </div>
                     </td>
                     <td
                       style={{
@@ -124,7 +130,13 @@ export default async function Home() {
                       {formatDateTime(source.last_synced_at)}
                     </td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <SourceSyncControls sourceKey={source.key} />
+                      {source.supports_sync ? (
+                        <SourceSyncControls sourceKey={source.key} />
+                      ) : (
+                        <span style={{ fontSize: 11, color: "var(--rw-muted)" }}>
+                          수동 등록 플랫폼
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -143,7 +155,7 @@ export default async function Home() {
           {/* Recent postings */}
           <div style={{ borderRight: "1px solid var(--rw-border)", minWidth: 0 }}>
             <div style={sectionLabelRow}>
-              <h2 style={sectionTitleStyle}>최근 수집 공고</h2>
+              <h2 style={sectionTitleStyle}>최근 공고</h2>
               <Link href="/postings" style={{ fontSize: 11, color: "var(--rw-accent)", fontWeight: 600 }}>
                 공고 전체 보기 →
               </Link>
@@ -260,7 +272,7 @@ export default async function Home() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {application.job_title} ·{" "}
+                          {application.source_name} · {application.job_title} ·{" "}
                           {application.resume_template_title ?? "수동 편집"}
                         </div>
                       </div>

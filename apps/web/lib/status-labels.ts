@@ -14,10 +14,19 @@ const applicationStatusLabels: Record<string, string> = {
   withdrawn: "철회",
 };
 
+const applicationMethodLabels: Record<string, string> = {
+  simple: "간편지원",
+  cover_letter: "자소서 작성",
+};
+
 export function getPostingCurationLabel(status: string): string {
   return postingCurationLabels[status] ?? status;
 }
 
 export function getApplicationStatusLabel(status: string): string {
   return applicationStatusLabels[status] ?? status;
+}
+
+export function getApplicationMethodLabel(method: string): string {
+  return applicationMethodLabels[method] ?? method;
 }

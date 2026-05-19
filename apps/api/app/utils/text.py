@@ -19,6 +19,16 @@ TAG_RULES: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
+def normalize_label(value: str) -> str:
+    return " ".join(value.replace("\xa0", " ").split())
+
+
+def build_source_key(value: str) -> str:
+    normalized = normalize_label(value).lower()
+    slug = re.sub(r"[^0-9a-zA-Z가-힣]+", "-", normalized).strip("-")
+    return slug[:50] or "platform"
+
+
 def normalize_whitespace(value: str) -> str:
     lines = value.replace("\xa0", " ").splitlines()
     normalized: list[str] = []

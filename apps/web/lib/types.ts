@@ -4,6 +4,7 @@ export type SourceSummary = {
   name: string;
   base_url: string;
   is_enabled: boolean;
+  supports_sync: boolean;
   last_synced_at: string | null;
   posting_count: number;
 };
@@ -36,6 +37,7 @@ export type JobPosting = {
   title: string;
   detail_url: string;
   external_apply_url: string | null;
+  ingest_kind: string;
   posted_at: string | null;
   apply_start_date: string | null;
   apply_end_date: string | null;
@@ -95,18 +97,39 @@ export type Application = {
   job_title: string;
   company_name: string;
   source_key: string;
+  source_name: string;
   detail_url: string;
   external_apply_url: string | null;
   resume_template_id: number | null;
   resume_template_title: string | null;
+  application_method: string;
   status: string;
   note: string;
   applied_at: string | null;
+  apply_end_date_snapshot: string | null;
+  apply_period_raw_snapshot: string | null;
   resume_snapshot_title: string;
   resume_snapshot_markdown: string;
+  posting_normalized_content: string;
+  posting_tags: string[];
   created_at: string;
   updated_at: string;
 };
+
+export type CoverLetterItem = {
+  id: number;
+  application_id: number;
+  question: string;
+  answer_markdown: string;
+  order_index: number;
+  tags: string[];
+  company_name: string;
+  job_title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CoverLetterItemPage = PaginatedResponse<CoverLetterItem>;
 
 export type Dashboard = {
   total_postings: number;

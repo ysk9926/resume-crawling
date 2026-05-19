@@ -1,5 +1,7 @@
 import type {
   Application,
+  CoverLetterItem,
+  CoverLetterItemPage,
   Dashboard,
   JobPostingPage,
   JobPosting,
@@ -17,6 +19,7 @@ const CACHE_TAGS = {
   sources: "sources",
   resumes: "resumes",
   applications: "applications",
+  coverLetter: "cover-letter",
   sourceCrawlInfo: "source-crawl-info",
 } as const;
 
@@ -41,6 +44,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(detail || `API request failed for ${path}`);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;
@@ -178,6 +185,42 @@ export async function getApplications(): Promise<Application[]> {
   });
 }
 
+export async function getApplication(applicationId: number): Promise<Application> {
+  return request<Application>(`/api/applications/${applicationId}`, {
+    next: {
+      revalidate: 15,
+      tags: [CACHE_TAGS.applications, `${CACHE_TAGS.applications}:${applicationId}`],
+    },
+  });
+}
+
+export async function getApplicationCoverLetterItems(applicationId: number): Promise<CoverLetterItem[]> {
+  return request<CoverLetterItem[]>(`/api/applications/${applicationId}/cover-letter-items`, {
+    next: {
+      revalidate: 15,
+      tags: [CACHE_TAGS.coverLetter, `${CACHE_TAGS.coverLetter}:${applicationId}`],
+    },
+  });
+}
+
+export async function getCoverLetterLibraryPage(filters?: {
+  tag?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<CoverLetterItemPage> {
+  const suffix = buildSearchSuffix({
+    tag: filters?.tag,
+    page: filters?.page,
+    page_size: filters?.page_size,
+  });
+  return request<CoverLetterItemPage>(`/api/applications/cover-letter-library${suffix}`, {
+    next: {
+      revalidate: 15,
+      tags: [CACHE_TAGS.coverLetter],
+    },
+  });
+}
+
 export async function getSourceCrawlInfo(sourceKey: string): Promise<SourceCrawlInfo> {
   return request<SourceCrawlInfo>(`/api/sources/${sourceKey}/crawl-info`, {
     next: {
@@ -239,10 +282,63 @@ export async function patchResume(
 export async function createApplication(payload: {
   job_posting_id: number;
   resume_template_id: number;
+  application_method: string;
   status: string;
   note: string;
+  applied_at?: string | null;
 }) {
   return request<Application>("/api/applications", {
+    method: "POST",
+    bodyJson: payload,
+  });
+}
+
+export async function createManualPosting(payload: {
+  platform_name: string;
+  company_name: string;
+  title: string;
+  detail_url?: string | null;
+  external_apply_url?: string | null;
+  posted_at?: string | null;
+  apply_start_date?: string | null;
+  apply_end_date?: string | null;
+  apply_period_raw?: string | null;
+  normalized_content: string;
+  tags: string[];
+  curation_status: string;
+  curation_note?: string | null;
+  is_bookmarked: boolean;
+  is_todo: boolean;
+}) {
+  return request<JobPosting>("/api/postings/manual", {
+    method: "POST",
+    bodyJson: payload,
+  });
+}
+
+export async function createManualApplication(payload: {
+  platform_name: string;
+  company_name: string;
+  job_title: string;
+  detail_url?: string | null;
+  external_apply_url?: string | null;
+  posted_at?: string | null;
+  apply_start_date?: string | null;
+  apply_end_date?: string | null;
+  apply_period_raw?: string | null;
+  normalized_content: string;
+  tags: string[];
+  curation_status: string;
+  curation_note?: string | null;
+  is_bookmarked: boolean;
+  is_todo: boolean;
+  resume_template_id: number;
+  application_method: string;
+  status: string;
+  note: string;
+  applied_at?: string | null;
+}) {
+  return request<Application>("/api/applications/manual", {
     method: "POST",
     bodyJson: payload,
   });
@@ -254,6 +350,7 @@ export async function patchApplication(
     status: string;
     note: string;
     applied_at: string | null;
+    resume_template_id: number | null;
     resume_snapshot_title: string;
     resume_snapshot_markdown: string;
   },
@@ -261,5 +358,40 @@ export async function patchApplication(
   return request<Application>(`/api/applications/${applicationId}`, {
     method: "PATCH",
     bodyJson: payload,
+  });
+}
+
+export async function postCoverLetterItem(
+  applicationId: number,
+  payload: {
+    question: string;
+    answer_markdown: string;
+    tags: string[];
+  },
+) {
+  return request<CoverLetterItem>(`/api/applications/${applicationId}/cover-letter-items`, {
+    method: "POST",
+    bodyJson: payload,
+  });
+}
+
+export async function patchCoverLetterItem(
+  itemId: number,
+  payload: {
+    question: string;
+    answer_markdown: string;
+    tags: string[];
+    order_index: number;
+  },
+) {
+  return request<CoverLetterItem>(`/api/applications/cover-letter-items/${itemId}`, {
+    method: "PATCH",
+    bodyJson: payload,
+  });
+}
+
+export async function deleteCoverLetterItem(itemId: number) {
+  await request<void>(`/api/applications/cover-letter-items/${itemId}`, {
+    method: "DELETE",
   });
 }

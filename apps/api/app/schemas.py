@@ -13,6 +13,7 @@ class SourceSummary(BaseModel):
     name: str
     base_url: str
     is_enabled: bool
+    supports_sync: bool
     last_synced_at: datetime | None
     posting_count: int = 0
 
@@ -67,6 +68,7 @@ class JobPostingOut(BaseModel):
     title: str
     detail_url: str
     external_apply_url: str | None
+    ingest_kind: str
     posted_at: date | None
     apply_start_date: date | None
     apply_end_date: date | None
@@ -127,14 +129,58 @@ class ResumeTemplateOut(BaseModel):
 class ApplicationCreate(BaseModel):
     job_posting_id: int
     resume_template_id: int
+    application_method: str = "simple"
     status: str = "planned"
     note: str = ""
+    applied_at: date | None = None
+
+
+class ManualJobPostingCreate(BaseModel):
+    platform_name: str
+    company_name: str
+    title: str
+    detail_url: str | None = None
+    external_apply_url: str | None = None
+    posted_at: date | None = None
+    apply_start_date: date | None = None
+    apply_end_date: date | None = None
+    apply_period_raw: str | None = None
+    normalized_content: str = ""
+    tags: list[str] = []
+    curation_status: str = "new"
+    curation_note: str | None = None
+    is_bookmarked: bool = False
+    is_todo: bool = False
+
+
+class ManualApplicationCreate(BaseModel):
+    platform_name: str
+    company_name: str
+    job_title: str
+    detail_url: str | None = None
+    external_apply_url: str | None = None
+    posted_at: date | None = None
+    apply_start_date: date | None = None
+    apply_end_date: date | None = None
+    apply_period_raw: str | None = None
+    normalized_content: str = ""
+    tags: list[str] = []
+    curation_status: str = "interesting"
+    curation_note: str | None = None
+    is_bookmarked: bool = True
+    is_todo: bool = False
+    resume_template_id: int
+    application_method: str = "simple"
+    status: str = "planned"
+    note: str = ""
+    applied_at: date | None = None
 
 
 class ApplicationUpdate(BaseModel):
     status: str
     note: str = ""
     applied_at: date | None = None
+    resume_template_id: int | None = None
     resume_snapshot_title: str
     resume_snapshot_markdown: str
 
@@ -147,17 +193,59 @@ class ApplicationOut(BaseModel):
     job_title: str
     company_name: str
     source_key: str
+    source_name: str
     detail_url: str
     external_apply_url: str | None
     resume_template_id: int | None
     resume_template_title: str | None
+    application_method: str
     status: str
     note: str
     applied_at: date | None
+    apply_end_date_snapshot: date | None
+    apply_period_raw_snapshot: str | None
     resume_snapshot_title: str
     resume_snapshot_markdown: str
+    posting_normalized_content: str = ""
+    posting_tags: list[str] = []
     created_at: datetime
     updated_at: datetime
+
+
+class CoverLetterItemCreate(BaseModel):
+    question: str = ""
+    answer_markdown: str = ""
+    tags: list[str] = []
+
+
+class CoverLetterItemUpdate(BaseModel):
+    question: str
+    answer_markdown: str = ""
+    tags: list[str] = []
+    order_index: int = Field(default=0, ge=0)
+
+
+class CoverLetterItemOut(BaseModel):
+    id: int
+    application_id: int
+    question: str
+    answer_markdown: str
+    order_index: int
+    tags: list[str]
+    company_name: str
+    job_title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class PaginatedCoverLetterItemOut(BaseModel):
+    items: list[CoverLetterItemOut]
+    page: int
+    page_size: int
+    total_count: int
+    total_pages: int
+    has_prev: bool
+    has_next: bool
 
 
 class DashboardOut(BaseModel):

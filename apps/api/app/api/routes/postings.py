@@ -13,10 +13,12 @@ from app.models import JobPosting, Source
 from app.schemas import (
     JobPostingOut,
     JobPostingUpdate,
+    ManualJobPostingCreate,
     PaginatedJobPostingOut,
     PostingOverviewOut,
 )
 from app.services.cache import get_read_cache_value, invalidate_read_caches, make_cache_key
+from app.services.sync import create_manual_posting
 
 
 router = APIRouter(prefix="/postings", tags=["postings"])
@@ -52,6 +54,7 @@ def serialize_posting(posting: JobPosting) -> JobPostingOut:
         title=posting.title,
         detail_url=posting.detail_url,
         external_apply_url=posting.external_apply_url,
+        ingest_kind=posting.ingest_kind,
         posted_at=posting.posted_at,
         apply_start_date=posting.apply_start_date,
         apply_end_date=posting.apply_end_date,
@@ -199,6 +202,46 @@ def list_todo_postings(
     db: Session = Depends(get_db),
 ) -> PaginatedJobPostingOut:
     return load_cached_postings_page(db, "todo", q, source_key, page, page_size)
+
+
+@router.post("/manual", response_model=JobPostingOut)
+def create_manual_posting_entry(
+    payload: ManualJobPostingCreate,
+    db: Session = Depends(get_db),
+) -> JobPostingOut:
+    try:
+        posting = create_manual_posting(
+            db,
+            platform_name=payload.platform_name,
+            company_name=payload.company_name,
+            title=payload.title,
+            detail_url=payload.detail_url,
+            external_apply_url=payload.external_apply_url,
+            posted_at=payload.posted_at,
+            apply_start_date=payload.apply_start_date,
+            apply_end_date=payload.apply_end_date,
+            apply_period_raw=payload.apply_period_raw,
+            normalized_content=payload.normalized_content,
+            tags=payload.tags,
+            curation_status=payload.curation_status,
+            curation_note=payload.curation_note,
+            is_bookmarked=payload.is_bookmarked,
+            is_todo=payload.is_todo,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    posting = db.scalar(
+        select(JobPosting)
+        .options(
+            joinedload(JobPosting.source),
+            joinedload(JobPosting.application),
+        )
+        .where(JobPosting.id == posting.id)
+    )
+    if posting is None:
+        raise HTTPException(status_code=500, detail="Posting could not be reloaded.")
+    return serialize_posting(posting)
 
 
 def load_cached_postings_page(

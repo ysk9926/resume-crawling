@@ -6,9 +6,14 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.crawlers.base import CrawlInfo, CrawledJobPosting
 from app.database import Base
-from app.models import JobPosting, JobSyncRun, ResumeTemplate, Source
+from app.models import CoverLetterItem, JobPosting, JobSyncRun, ResumeTemplate, Source
 from app.services import sync as sync_service
-from app.services.sync import create_or_replace_application, upsert_postings
+from app.services.sync import (
+    create_cover_letter_item,
+    create_or_replace_application,
+    update_cover_letter_item,
+    upsert_postings,
+)
 
 
 def make_session() -> Session:
@@ -101,13 +106,82 @@ def test_create_or_replace_application_uses_resume_snapshot() -> None:
             session,
             job_posting_id=posting.id,
             resume_template_id=resume.id,
+            application_method="simple",
             status="planned",
             note="초기 메모",
         )
 
         assert application.resume_snapshot_title == "데이터용 이력서 · 한빛자산운용"
         assert application.resume_snapshot_markdown == "# 경력\n- 수집 파이프라인 구축"
+        assert application.application_method == "simple"
+        assert application.apply_end_date_snapshot is None
         assert application.status == "planned"
+
+
+def test_create_or_replace_application_snapshots_deadline_and_cover_letter_items() -> None:
+    with make_session() as session:
+        source = Source(key="jobkorea", name="JobKorea", base_url="https://example.com")
+        posting = JobPosting(
+            source=source,
+            external_id="102",
+            company_name="코몬티",
+            title="대한항공 홈페이지 백엔드",
+            detail_url="https://example.com/jobs/102",
+            external_apply_url="https://example.com/apply/102",
+            posted_at=date(2026, 5, 15),
+            apply_period_raw="~06/14",
+            apply_start_date=None,
+            apply_end_date=date(2026, 6, 14),
+            raw_content="원문",
+            normalized_content="정제문",
+            tags=["Backend"],
+        )
+        resume = ResumeTemplate(
+            title="백엔드 이력서",
+            summary="백엔드 템플릿",
+            markdown_content="# 경력\n- 서비스 운영",
+        )
+        session.add_all([source, posting, resume])
+        session.commit()
+        session.refresh(posting)
+        session.refresh(resume)
+
+        application = create_or_replace_application(
+            session,
+            job_posting_id=posting.id,
+            resume_template_id=resume.id,
+            application_method="cover_letter",
+            status="planned",
+            note="자소서 작성 예정",
+        )
+
+        assert application.application_method == "cover_letter"
+        assert application.apply_end_date_snapshot == date(2026, 6, 14)
+        assert application.apply_period_raw_snapshot == "~06/14"
+
+        item = create_cover_letter_item(
+            session,
+            application_id=application.id,
+            question="지원 동기를 작성해주세요.",
+            answer_markdown="서비스 운영 경험을 기반으로 기여하겠습니다.",
+            tags=["동기", "Backend", "backend"],
+        )
+
+        assert item.order_index == 0
+        assert sorted(tag.label for tag in item.tags) == ["Backend", "동기"]
+
+        updated = update_cover_letter_item(
+            session,
+            item_id=item.id,
+            question="지원 동기와 관련 경험을 작성해주세요.",
+            answer_markdown="운영 경험과 협업 경험을 정리했습니다.",
+            tags=["경험", "Backend"],
+            order_index=3,
+        )
+
+        assert updated.order_index == 3
+        assert sorted(tag.label for tag in updated.tags) == ["Backend", "경험"]
+        assert session.query(CoverLetterItem).count() == 1
 
 
 def test_run_source_sync_rejects_range_outside_total_pages(monkeypatch: pytest.MonkeyPatch) -> None:

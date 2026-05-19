@@ -1,15 +1,21 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
+import { redirect } from "next/navigation";
 
 import {
   CACHE_TAGS,
   createApplication,
+  createManualApplication,
+  createManualPosting,
   createResume,
+  deleteCoverLetterItem,
   getSourceCrawlInfo,
+  patchCoverLetterItem,
   patchApplication,
   patchPosting,
   patchResume,
+  postCoverLetterItem,
   postSyncSource,
 } from "@/lib/api";
 
@@ -19,6 +25,22 @@ function parseRequiredNumber(value: FormDataEntryValue | null, fieldName: string
     throw new Error(`Invalid numeric value for ${fieldName}`);
   }
   return parsed;
+}
+
+function parseTagList(value: FormDataEntryValue | null) {
+  return String(value ?? "")
+    .split(/[\n,]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function parseOptionalText(value: FormDataEntryValue | null) {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
+}
+
+function parseCheckbox(value: FormDataEntryValue | null) {
+  return value === "on";
 }
 
 function revalidateAll() {
@@ -124,26 +146,136 @@ export async function updateResumeAction(formData: FormData) {
 export async function createApplicationAction(formData: FormData) {
   const jobPostingId = parseRequiredNumber(formData.get("jobPostingId"), "jobPostingId");
   const resumeTemplateId = parseRequiredNumber(formData.get("resumeTemplateId"), "resumeTemplateId");
-  await createApplication({
+  const application = await createApplication({
     job_posting_id: jobPostingId,
     resume_template_id: resumeTemplateId,
+    application_method: String(formData.get("applicationMethod") ?? "simple"),
     status: String(formData.get("status") ?? "planned"),
     note: String(formData.get("note") ?? ""),
+    applied_at: parseOptionalText(formData.get("appliedAt")),
   });
-  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings, CACHE_TAGS.applications]);
+  updateTags([
+    CACHE_TAGS.dashboard,
+    CACHE_TAGS.postings,
+    CACHE_TAGS.applications,
+    CACHE_TAGS.coverLetter,
+  ]);
   revalidateAll();
+  revalidatePath(`/applications/${application.id}`);
+  if (application.application_method === "cover_letter") {
+    redirect(`/applications/${application.id}`);
+  }
+}
+
+export async function createManualPostingAction(formData: FormData) {
+  await createManualPosting({
+    platform_name: String(formData.get("platformName") ?? ""),
+    company_name: String(formData.get("companyName") ?? ""),
+    title: String(formData.get("jobTitle") ?? ""),
+    detail_url: parseOptionalText(formData.get("detailUrl")),
+    external_apply_url: parseOptionalText(formData.get("externalApplyUrl")),
+    posted_at: parseOptionalText(formData.get("postedAt")),
+    apply_start_date: parseOptionalText(formData.get("applyStartDate")),
+    apply_end_date: parseOptionalText(formData.get("applyEndDate")),
+    apply_period_raw: parseOptionalText(formData.get("applyPeriodRaw")),
+    normalized_content: String(formData.get("normalizedContent") ?? ""),
+    tags: parseTagList(formData.get("tags")),
+    curation_status: String(formData.get("curationStatus") ?? "new"),
+    curation_note: parseOptionalText(formData.get("curationNote")),
+    is_bookmarked: parseCheckbox(formData.get("isBookmarked")),
+    is_todo: parseCheckbox(formData.get("isTodo")),
+  });
+  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.sources, CACHE_TAGS.postings]);
+  revalidateAll();
+  redirect("/postings");
+}
+
+export async function createManualApplicationAction(formData: FormData) {
+  const application = await createManualApplication({
+    platform_name: String(formData.get("platformName") ?? ""),
+    company_name: String(formData.get("companyName") ?? ""),
+    job_title: String(formData.get("jobTitle") ?? ""),
+    detail_url: parseOptionalText(formData.get("detailUrl")),
+    external_apply_url: parseOptionalText(formData.get("externalApplyUrl")),
+    posted_at: parseOptionalText(formData.get("postedAt")),
+    apply_start_date: parseOptionalText(formData.get("applyStartDate")),
+    apply_end_date: parseOptionalText(formData.get("applyEndDate")),
+    apply_period_raw: parseOptionalText(formData.get("applyPeriodRaw")),
+    normalized_content: String(formData.get("normalizedContent") ?? ""),
+    tags: parseTagList(formData.get("tags")),
+    curation_status: String(formData.get("curationStatus") ?? "interesting"),
+    curation_note: parseOptionalText(formData.get("curationNote")),
+    is_bookmarked: parseCheckbox(formData.get("isBookmarked")),
+    is_todo: parseCheckbox(formData.get("isTodo")),
+    resume_template_id: parseRequiredNumber(formData.get("resumeTemplateId"), "resumeTemplateId"),
+    application_method: String(formData.get("applicationMethod") ?? "simple"),
+    status: String(formData.get("status") ?? "planned"),
+    note: String(formData.get("note") ?? ""),
+    applied_at: parseOptionalText(formData.get("appliedAt")),
+  });
+  updateTags([
+    CACHE_TAGS.dashboard,
+    CACHE_TAGS.sources,
+    CACHE_TAGS.postings,
+    CACHE_TAGS.applications,
+    CACHE_TAGS.coverLetter,
+  ]);
+  revalidateAll();
+  revalidatePath(`/applications/${application.id}`);
+  if (application.application_method === "cover_letter") {
+    redirect(`/applications/${application.id}`);
+  }
+  redirect("/applications");
 }
 
 export async function updateApplicationAction(formData: FormData) {
   const applicationId = parseRequiredNumber(formData.get("applicationId"), "applicationId");
   const appliedAt = String(formData.get("appliedAt") ?? "").trim();
+  const resumeTemplateIdRaw = String(formData.get("resumeTemplateId") ?? "").trim();
+  const resumeTemplateId = resumeTemplateIdRaw ? Number(resumeTemplateIdRaw) : null;
   await patchApplication(applicationId, {
     status: String(formData.get("status") ?? "planned"),
     note: String(formData.get("note") ?? ""),
     applied_at: appliedAt || null,
+    resume_template_id:
+      resumeTemplateId !== null && Number.isFinite(resumeTemplateId) ? resumeTemplateId : null,
     resume_snapshot_title: String(formData.get("resumeSnapshotTitle") ?? ""),
     resume_snapshot_markdown: String(formData.get("resumeSnapshotMarkdown") ?? ""),
   });
   updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings, CACHE_TAGS.applications]);
   revalidateAll();
+  revalidatePath(`/applications/${applicationId}`);
+}
+
+export async function createCoverLetterItemAction(formData: FormData) {
+  const applicationId = parseRequiredNumber(formData.get("applicationId"), "applicationId");
+  await postCoverLetterItem(applicationId, {
+    question: String(formData.get("question") ?? ""),
+    answer_markdown: String(formData.get("answerMarkdown") ?? ""),
+    tags: parseTagList(formData.get("tags")),
+  });
+  updateTags([CACHE_TAGS.applications, CACHE_TAGS.coverLetter]);
+  revalidatePath("/applications");
+  revalidatePath(`/applications/${applicationId}`);
+}
+
+export async function updateCoverLetterItemAction(formData: FormData) {
+  const applicationId = parseRequiredNumber(formData.get("applicationId"), "applicationId");
+  const itemId = parseRequiredNumber(formData.get("itemId"), "itemId");
+  await patchCoverLetterItem(itemId, {
+    question: String(formData.get("question") ?? ""),
+    answer_markdown: String(formData.get("answerMarkdown") ?? ""),
+    tags: parseTagList(formData.get("tags")),
+    order_index: parseRequiredNumber(formData.get("orderIndex"), "orderIndex"),
+  });
+  updateTags([CACHE_TAGS.applications, CACHE_TAGS.coverLetter]);
+  revalidatePath(`/applications/${applicationId}`);
+}
+
+export async function deleteCoverLetterItemAction(formData: FormData) {
+  const applicationId = parseRequiredNumber(formData.get("applicationId"), "applicationId");
+  const itemId = parseRequiredNumber(formData.get("itemId"), "itemId");
+  await deleteCoverLetterItem(itemId);
+  updateTags([CACHE_TAGS.applications, CACHE_TAGS.coverLetter]);
+  revalidatePath(`/applications/${applicationId}`);
 }
