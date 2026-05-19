@@ -35,7 +35,7 @@ const STATUS_FILTERS: Array<{
   },
 ];
 
-const ROW_GRID_COLUMNS = "minmax(0, 1fr) 220px 140px 160px 150px";
+const ROW_GRID_COLUMNS = "92px minmax(0, 1fr) 120px 140px";
 
 type DeadlineInfo = {
   label: string;
@@ -255,10 +255,9 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
         ) : (
           <div>
             <div style={columnHeaderStyle}>
-              <span>회사 / 직무</span>
-              <span>지원 방식 / 템플릿</span>
               <span>상태</span>
-              <span>마감일</span>
+              <span>회사 / 직무</span>
+              <span>마감</span>
               <span style={{ textAlign: "right" }}>최근 업데이트</span>
             </div>
             <div role="list">

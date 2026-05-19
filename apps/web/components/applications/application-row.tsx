@@ -36,7 +36,15 @@ function toneForStatus(
   return "neutral";
 }
 
-const dDayBadgeBase: CSSProperties = {
+const deadlineNumericColor: Record<DeadlineTone, string> = {
+  danger: "#b91c1c",
+  warning: "#b45309",
+  info: "var(--rw-foreground)",
+  success: "var(--rw-foreground)",
+  neutral: "var(--rw-muted)",
+};
+
+const modalChipBase: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -49,7 +57,7 @@ const dDayBadgeBase: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const dDayPalette: Record<DeadlineTone, CSSProperties> = {
+const modalChipPalette: Record<DeadlineTone, CSSProperties> = {
   danger: { backgroundColor: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" },
   warning: { backgroundColor: "#fff7ed", color: "#b45309", border: "1px solid #fed7aa" },
   info: { backgroundColor: "#eff6ff", color: "#1d4ed8", border: "1px solid #dbeafe" },
@@ -81,6 +89,20 @@ export function ApplicationRow({
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const isCoverLetter = application.application_method === "cover_letter";
+  const isClosed =
+    application.status === "rejected" || application.status === "withdrawn";
+
+  const statusLabel =
+    application.status === "planned" && isCoverLetter
+      ? "자소서 작성"
+      : getApplicationStatusLabel(application.status);
+
+  const methodLabel = getApplicationMethodLabel(application.application_method);
+  const templateLabel = application.resume_template_title ?? "수동 편집";
+
+  const metaParts = [application.source_name, methodLabel, templateLabel].filter(
+    (part): part is string => Boolean(part && part.length > 0),
+  );
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -131,9 +153,14 @@ export function ApplicationRow({
           padding: "16px 24px",
           borderBottom: "1px solid var(--rw-border)",
           cursor: "pointer",
+          opacity: isClosed ? 0.6 : 1,
           transition: "background-color 150ms ease",
         }}
       >
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <StatusBadge label={statusLabel} tone={toneForStatus(application.status)} />
+        </div>
+
         <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
           <div
             style={{
@@ -158,16 +185,6 @@ export function ApplicationRow({
           >
             {application.job_title}
           </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <StatusBadge label={application.source_name} tone="neutral" />
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-          <StatusBadge
-            label={getApplicationMethodLabel(application.application_method)}
-            tone={isCoverLetter ? "warning" : "info"}
-          />
           <div
             style={{
               fontSize: 11,
@@ -176,21 +193,23 @@ export function ApplicationRow({
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
             }}
-            title={application.resume_template_title ?? "수동 편집"}
+            title={metaParts.join(" · ")}
           >
-            {application.resume_template_title ?? "수동 편집"}
+            {metaParts.join(" · ")}
           </div>
         </div>
 
-        <div>
-          <StatusBadge
-            label={getApplicationStatusLabel(application.status)}
-            tone={toneForStatus(application.status)}
-          />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <span style={{ ...dDayBadgeBase, ...dDayPalette[deadline.tone] }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: deadlineNumericColor[deadline.tone],
+              fontVariantNumeric: "tabular-nums",
+              letterSpacing: "-0.01em",
+              lineHeight: 1.1,
+            }}
+          >
             {deadline.label}
           </span>
           {deadline.detail ? (
@@ -267,14 +286,14 @@ export function ApplicationRow({
               <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                 <StatusBadge label={application.source_name} tone="neutral" />
                 <StatusBadge
-                  label={getApplicationMethodLabel(application.application_method)}
+                  label={methodLabel}
                   tone={isCoverLetter ? "warning" : "info"}
                 />
                 <StatusBadge
                   label={getApplicationStatusLabel(application.status)}
                   tone={toneForStatus(application.status)}
                 />
-                <span style={{ ...dDayBadgeBase, ...dDayPalette[deadline.tone] }}>
+                <span style={{ ...modalChipBase, ...modalChipPalette[deadline.tone] }}>
                   {deadline.label}
                 </span>
               </div>
@@ -316,9 +335,7 @@ export function ApplicationRow({
             </div>
             <div>
               <div style={detailLabelStyle}>이력서 템플릿</div>
-              <div style={detailValueStyle}>
-                {application.resume_template_title ?? "수동 편집"}
-              </div>
+              <div style={detailValueStyle}>{templateLabel}</div>
             </div>
             <div>
               <div style={detailLabelStyle}>스냅샷 제목</div>
