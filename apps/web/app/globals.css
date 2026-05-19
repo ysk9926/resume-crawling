@@ -170,8 +170,21 @@ textarea {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .rw-application-modal[open] {
+  .rw-application-modal[open]::backdrop {
+    animation: rw-modal-backdrop 160ms ease-out;
+  }
+
+  .rw-application-modal[open] > * {
     animation: rw-modal-pop 160ms ease-out;
+  }
+}
+
+@keyframes rw-modal-backdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
