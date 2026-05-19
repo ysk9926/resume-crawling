@@ -205,7 +205,7 @@ def test_run_source_sync_rejects_range_outside_total_pages(monkeypatch: pytest.M
         session.add(source)
         session.commit()
 
-        monkeypatch.setattr(sync_service, "get_crawler", lambda source_key: crawler)
+        monkeypatch.setattr(sync_service, "get_crawler", lambda source_key, filters=None: crawler)
 
         with pytest.raises(ValueError, match="총 페이지 수"):
             sync_service.run_source_sync(session, source_key="kofia", start_page=2, end_page=4)
@@ -213,4 +213,49 @@ def test_run_source_sync_rejects_range_outside_total_pages(monkeypatch: pytest.M
         sync_run = session.query(JobSyncRun).one()
         assert sync_run.status == "failed"
         assert "총 페이지 수" in (sync_run.message or "")
+        assert crawler.closed is True
+
+
+def test_run_source_sync_with_filters_passes_filters_to_crawler(monkeypatch: pytest.MonkeyPatch) -> None:
+    class StubCrawler:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def get_crawl_info(self, page: int = 1) -> CrawlInfo:
+            return CrawlInfo(current_page=page, total_pages=1, total_items=1)
+
+        def crawl(self, start_page: int = 1, end_page: int = 1) -> list[CrawledJobPosting]:
+            return []
+
+        def close(self) -> None:
+            self.closed = True
+
+    crawler = StubCrawler()
+    captured: dict[str, object] = {}
+
+    def fake_get_crawler(source_key: str, filters: dict[str, object] | None = None) -> StubCrawler:
+        captured["source_key"] = source_key
+        captured["filters"] = filters
+        return crawler
+
+    with make_session() as session:
+        source = Source(key="remember", name="Remember", base_url="https://example.com")
+        session.add(source)
+        session.commit()
+
+        monkeypatch.setattr(sync_service, "get_crawler", fake_get_crawler)
+
+        sync_run = sync_service.run_source_sync_with_filters(
+            session,
+            source_key="remember",
+            start_page=1,
+            end_page=1,
+            filters={"keywords": ["백엔드"], "leader_position": True},
+        )
+
+        assert sync_run.status == "success"
+        assert captured == {
+            "source_key": "remember",
+            "filters": {"keywords": ["백엔드"], "leader_position": True},
+        }
         assert crawler.closed is True

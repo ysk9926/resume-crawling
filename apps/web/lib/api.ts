@@ -6,6 +6,7 @@ import type {
   JobPostingPage,
   JobPosting,
   PostingOverview,
+  RememberSearchFilters,
   ResumeTemplate,
   SourceCrawlInfo,
   SourceSummary,
@@ -232,10 +233,25 @@ export async function getSourceCrawlInfo(sourceKey: string): Promise<SourceCrawl
 
 export { CACHE_TAGS };
 
-export async function postSyncSource(sourceKey: string, startPage: number, endPage: number): Promise<SyncRun> {
+export async function postSourceCrawlInfo(
+  sourceKey: string,
+  filters?: RememberSearchFilters,
+): Promise<SourceCrawlInfo> {
+  return request<SourceCrawlInfo>(`/api/sources/${sourceKey}/crawl-info`, {
+    method: "POST",
+    bodyJson: { page: 1, filters },
+  });
+}
+
+export async function postSyncSource(
+  sourceKey: string,
+  startPage: number,
+  endPage: number,
+  filters?: RememberSearchFilters,
+): Promise<SyncRun> {
   return request<SyncRun>(`/api/sources/${sourceKey}/sync`, {
     method: "POST",
-    bodyJson: { start_page: startPage, end_page: endPage },
+    bodyJson: { start_page: startPage, end_page: endPage, filters },
   });
 }
 

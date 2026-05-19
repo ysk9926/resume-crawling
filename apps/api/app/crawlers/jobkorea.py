@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 import math
 import re
-from typing import Callable
+from typing import Any, Callable, Mapping
 from urllib.parse import urljoin
 
 import httpx
@@ -66,6 +66,7 @@ class JobKoreaCrawler:
         self,
         client: httpx.Client | None = None,
         today_provider: Callable[[], date] | None = None,
+        filters: Mapping[str, Any] | None = None,
     ) -> None:
         self.client = client or httpx.Client(
             follow_redirects=True,
@@ -79,6 +80,7 @@ class JobKoreaCrawler:
         self._owns_client = client is None
         self._is_closed = False
         self._today_provider = today_provider or date.today
+        _ = filters
 
     def get_crawl_info(self, page: int = 1) -> CrawlInfo:
         if page < 1:

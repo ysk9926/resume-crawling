@@ -8,9 +8,15 @@ from app.config import CRAWL_INFO_CACHE_TTL_SECONDS, LOOKUP_CACHE_TTL_SECONDS
 from app.crawlers.registry import get_crawler
 from app.database import get_db
 from app.models import JobPosting, Source
-from app.schemas import JobSyncRunOut, SourceCrawlInfoOut, SourceSummary, SyncRequest
+from app.schemas import (
+    JobSyncRunOut,
+    SourceCrawlInfoOut,
+    SourceCrawlInfoRequest,
+    SourceSummary,
+    SyncRequest,
+)
 from app.services.cache import get_read_cache_value
-from app.services.sync import run_source_sync
+from app.services.sync import run_source_sync_with_filters
 
 
 router = APIRouter(prefix="/sources", tags=["sources"])
@@ -32,11 +38,12 @@ def sync_source(
     db: Session = Depends(get_db),
 ) -> JobSyncRunOut:
     try:
-        sync_run = run_source_sync(
+        sync_run = run_source_sync_with_filters(
             db,
             source_key=source_key,
             start_page=payload.start_page,
             end_page=payload.end_page,
+            filters=payload.filters.model_dump(exclude_none=True) if payload.filters else None,
         )
     except ValueError as exc:
         detail = str(exc)
@@ -52,7 +59,19 @@ def get_source_crawl_info(source_key: str) -> SourceCrawlInfoOut:
     return get_read_cache_value(
         f"source-crawl-info:{source_key}",
         CRAWL_INFO_CACHE_TTL_SECONDS,
-        lambda: load_source_crawl_info(source_key),
+        lambda: load_source_crawl_info(source_key, filters=None, page=1),
+    )
+
+
+@router.post("/{source_key}/crawl-info", response_model=SourceCrawlInfoOut)
+def get_source_crawl_info_with_filters(
+    source_key: str,
+    payload: SourceCrawlInfoRequest,
+) -> SourceCrawlInfoOut:
+    return load_source_crawl_info(
+        source_key,
+        page=payload.page,
+        filters=payload.filters.model_dump(exclude_none=True) if payload.filters else None,
     )
 
 
@@ -84,14 +103,18 @@ def load_sources(db: Session) -> list[SourceSummary]:
     ]
 
 
-def load_source_crawl_info(source_key: str) -> SourceCrawlInfoOut:
+def load_source_crawl_info(
+    source_key: str,
+    page: int = 1,
+    filters: dict[str, object] | None = None,
+) -> SourceCrawlInfoOut:
     try:
-        crawler = get_crawler(source_key)
+        crawler = get_crawler(source_key, filters=filters)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Source not found: {source_key}") from exc
 
     try:
-        crawl_info = crawler.get_crawl_info()
+        crawl_info = crawler.get_crawl_info(page=page)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

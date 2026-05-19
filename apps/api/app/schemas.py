@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -21,12 +22,53 @@ class SourceSummary(BaseModel):
 class SyncRequest(BaseModel):
     start_page: int = Field(default=1, ge=1, le=10000)
     end_page: int = Field(default=1, ge=1, le=10000)
+    filters: "RememberSearchFilters | None" = None
 
     @model_validator(mode="after")
     def validate_page_range(self) -> "SyncRequest":
         if self.end_page < self.start_page:
             raise ValueError("종료 페이지는 시작 페이지보다 크거나 같아야 합니다.")
         return self
+
+
+class RememberAddressFilter(BaseModel):
+    level1: str = Field(min_length=1, max_length=50)
+    level2: str | None = Field(default=None, max_length=50)
+
+
+class RememberIndustryFilter(BaseModel):
+    level1: str = Field(min_length=1, max_length=50)
+    level2: str | None = Field(default=None, max_length=50)
+    level3: str | None = Field(default=None, max_length=50)
+
+
+class RememberSearchFilters(BaseModel):
+    keywords: list[str] | None = None
+    min_salary: int | None = Field(default=None, ge=0, le=1000000)
+    max_salary: int | None = Field(default=None, ge=0, le=1000000)
+    addresses: list[RememberAddressFilter] | None = None
+    career_year: int | None = Field(default=None, ge=-1, le=99)
+    company_sizes: list[str] | None = None
+    industry_v2_names: list[RememberIndustryFilter] | None = None
+    leader_position: bool | None = None
+    organization_type: Literal["all", "without_headhunter"] | None = None
+    application_type: Literal["all", "apply"] | None = None
+    include_applied_job_posting: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_salary_range(self) -> "RememberSearchFilters":
+        if (
+            self.min_salary is not None
+            and self.max_salary is not None
+            and self.max_salary < self.min_salary
+        ):
+            raise ValueError("최대 연봉은 최소 연봉보다 크거나 같아야 합니다.")
+        return self
+
+
+class SourceCrawlInfoRequest(BaseModel):
+    page: int = Field(default=1, ge=1, le=10000)
+    filters: RememberSearchFilters | None = None
 
 
 class SourceCrawlInfoOut(BaseModel):

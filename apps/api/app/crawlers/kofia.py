@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 import math
 import re
+from typing import Any, Mapping
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
@@ -39,7 +40,11 @@ class KofiaCrawler:
     display_name = "KOFIA 채용안내"
     base_url = "https://www.kofia.or.kr/brd/m_96/list.do"
 
-    def __init__(self, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        client: httpx.Client | None = None,
+        filters: Mapping[str, Any] | None = None,
+    ) -> None:
         self.client = client or httpx.Client(
             follow_redirects=True,
             timeout=20.0,
@@ -47,6 +52,7 @@ class KofiaCrawler:
         )
         self._owns_client = client is None
         self._is_closed = False
+        _ = filters
 
     def get_crawl_info(self, page: int = 1) -> CrawlInfo:
         if page < 1:

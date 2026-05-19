@@ -10,14 +10,15 @@ import {
   createManualPosting,
   createResume,
   deleteCoverLetterItem,
-  getSourceCrawlInfo,
   patchCoverLetterItem,
   patchApplication,
   patchPosting,
   patchResume,
+  postSourceCrawlInfo,
   postCoverLetterItem,
   postSyncSource,
 } from "@/lib/api";
+import type { RememberSearchFilters } from "@/lib/types";
 
 function parseRequiredNumber(value: FormDataEntryValue | null, fieldName: string) {
   const parsed = Number(value);
@@ -73,15 +74,21 @@ export async function syncSourceAction(formData: FormData) {
 }
 
 export async function fetchSourceCrawlInfoAction(sourceKey: string) {
-  return getSourceCrawlInfo(sourceKey);
+  return postSourceCrawlInfo(sourceKey);
 }
 
 export async function syncSourceRangeAction(input: {
   sourceKey: string;
   startPage: number;
   endPage: number;
+  filters?: RememberSearchFilters;
 }) {
-  const syncRun = await postSyncSource(input.sourceKey, input.startPage, input.endPage);
+  const syncRun = await postSyncSource(
+    input.sourceKey,
+    input.startPage,
+    input.endPage,
+    input.filters,
+  );
   updateTags([
     CACHE_TAGS.dashboard,
     CACHE_TAGS.sources,
@@ -92,6 +99,13 @@ export async function syncSourceRangeAction(input: {
   ]);
   revalidateAll();
   return syncRun;
+}
+
+export async function fetchFilteredSourceCrawlInfoAction(input: {
+  sourceKey: string;
+  filters?: RememberSearchFilters;
+}) {
+  return postSourceCrawlInfo(input.sourceKey, input.filters);
 }
 
 export async function updatePostingCurationAction(formData: FormData) {

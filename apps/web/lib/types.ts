@@ -28,6 +28,31 @@ export type SourceCrawlInfo = {
   total_items: number;
 };
 
+export type RememberAddressFilter = {
+  level1: string;
+  level2?: string | null;
+};
+
+export type RememberIndustryFilter = {
+  level1: string;
+  level2?: string | null;
+  level3?: string | null;
+};
+
+export type RememberSearchFilters = {
+  keywords?: string[];
+  min_salary?: number;
+  max_salary?: number;
+  addresses?: RememberAddressFilter[];
+  career_year?: number;
+  company_sizes?: string[];
+  industry_v2_names?: RememberIndustryFilter[];
+  leader_position?: boolean;
+  organization_type?: "all" | "without_headhunter";
+  application_type?: "all" | "apply";
+  include_applied_job_posting?: boolean;
+};
+
 export type JobPosting = {
   id: number;
   source_key: string;

@@ -80,6 +80,22 @@ def upsert_postings(
 
 
 def run_source_sync(session: Session, source_key: str, start_page: int, end_page: int) -> JobSyncRun:
+    return run_source_sync_with_filters(
+        session,
+        source_key=source_key,
+        start_page=start_page,
+        end_page=end_page,
+        filters=None,
+    )
+
+
+def run_source_sync_with_filters(
+    session: Session,
+    source_key: str,
+    start_page: int,
+    end_page: int,
+    filters: dict[str, object] | None = None,
+) -> JobSyncRun:
     source = session.scalar(select(Source).where(Source.key == source_key))
     if source is None:
         raise ValueError(f"Source not found: {source_key}")
@@ -91,7 +107,7 @@ def run_source_sync(session: Session, source_key: str, start_page: int, end_page
     session.commit()
     session.refresh(sync_run)
 
-    crawler = get_crawler(source_key)
+    crawler = get_crawler(source_key, filters=filters)
     try:
         crawl_info = crawler.get_crawl_info()
         if start_page < 1:
