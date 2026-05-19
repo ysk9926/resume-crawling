@@ -4,37 +4,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   inputStyle,
-  monoTextareaStyle,
   pageBodyStyle,
   primaryButtonStyle,
+  textareaStyle,
 } from "@/components/ui/primitives";
 import { getResumes } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-
-const defaultMarkdown = `# 이름 / 연락처
-- 이메일:
-- GitHub:
-- 포트폴리오:
-
-# 한 줄 소개
-금융/데이터/웹 서비스를 직접 만들고 운영한 경험을 바탕으로, 문제를 빠르게 구조화하고 실제 제품으로 구현합니다.
-
-# 기술 스택
-- Python
-- FastAPI
-- Next.js
-- TypeScript
-- SQLite / PostgreSQL
-
-# 주요 경력
-## 프로젝트 또는 회사명
-- 무엇을 만들었는지
-- 어떤 역할을 맡았는지
-- 어떤 결과를 냈는지
-
-# 지원 포인트
-- 이 회사에 맞춰 조정할 문장
-`;
+import { masterResumeTemplate } from "@/lib/master-resume-template";
 
 const sectionLabelRow: React.CSSProperties = {
   display: "flex",
@@ -107,19 +83,21 @@ export default async function ResumesPage() {
           <div style={sectionLabelRow}>
             <h2 style={sectionTitle}>새 템플릿</h2>
             <span style={{ fontSize: 11, color: "var(--rw-muted)" }}>
-              기본 마크다운을 그대로 두고 생성한 뒤 아래에서 수정할 수 있습니다.
+              마스터 이력서 초안이 미리 채워져 있으며, 생성 후 아래에서 계속 다듬을 수 있습니다.
             </span>
           </div>
           <form action={createResumeAction}>
             <div style={formGridStyle}>
               <input
                 name="title"
-                placeholder="예: 금융 데이터용 이력서"
+                placeholder="예: 백엔드 지원용 이력서"
+                defaultValue={masterResumeTemplate.title}
                 style={inputStyle}
               />
               <input
                 name="summary"
                 placeholder="어떤 포지션에 쓰는 템플릿인지 요약"
+                defaultValue={masterResumeTemplate.summary}
                 style={inputStyle}
               />
             </div>
@@ -127,8 +105,8 @@ export default async function ResumesPage() {
               <textarea
                 name="markdownContent"
                 rows={16}
-                defaultValue={defaultMarkdown}
-                style={monoTextareaStyle}
+                defaultValue={masterResumeTemplate.content}
+                style={textareaStyle}
               />
             </div>
             <div style={actionRow}>
@@ -215,7 +193,7 @@ export default async function ResumesPage() {
                         name="markdownContent"
                         rows={20}
                         defaultValue={resume.markdown_content}
-                        style={monoTextareaStyle}
+                        style={textareaStyle}
                       />
                     </div>
                     <div style={actionRow}>

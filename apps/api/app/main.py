@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import applications, dashboard, postings, resumes, sources
 from app.config import API_TITLE
 from app.database import Base, SessionLocal, engine
-from app.seed import seed_sources
+from app.seed import seed_resume_templates, seed_sources
 
 
 def _ensure_sqlite_columns() -> None:
@@ -55,6 +55,7 @@ async def lifespan(_: FastAPI):
     _ensure_sqlite_columns()
     with SessionLocal() as session:
         seed_sources(session)
+        seed_resume_templates(session)
     yield
 
 
