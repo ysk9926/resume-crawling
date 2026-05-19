@@ -13,6 +13,66 @@ import type {
   CalendarMonth,
 } from "@/lib/types";
 
+type LayerPalette = {
+  background: string;
+  backgroundSelected: string;
+  border: string;
+  borderSelected: string;
+  color: string;
+  checkboxFill: string;
+};
+
+const LAYER_PALETTES: Record<CalendarLayerKey, LayerPalette> = {
+  posting_deadline: {
+    background: "#fef2f2",
+    backgroundSelected: "#fecaca",
+    border: "#fecaca",
+    borderSelected: "#f87171",
+    color: "#991b1b",
+    checkboxFill: "#dc2626",
+  },
+  posting_todo: {
+    background: "#fff7ed",
+    backgroundSelected: "#fed7aa",
+    border: "#fdba74",
+    borderSelected: "#fb923c",
+    color: "#9a3412",
+    checkboxFill: "#ea580c",
+  },
+  posting_bookmark: {
+    background: "#ecfdf5",
+    backgroundSelected: "#d1fae5",
+    border: "#a7f3d0",
+    borderSelected: "#34d399",
+    color: "#065f46",
+    checkboxFill: "#10b981",
+  },
+  application_planned: {
+    background: "#fef3c7",
+    backgroundSelected: "#fde68a",
+    border: "#fcd34d",
+    borderSelected: "#f59e0b",
+    color: "#92400e",
+    checkboxFill: "#eab308",
+  },
+  application_applied: {
+    background: "#eff6ff",
+    backgroundSelected: "#dbeafe",
+    border: "#bfdbfe",
+    borderSelected: "#60a5fa",
+    color: "#1e3a8a",
+    checkboxFill: "#2563eb",
+  },
+};
+
+const LAYER_PRIORITY: CalendarLayerKey[] = [
+  "posting_deadline",
+  "posting_todo",
+  "posting_bookmark",
+  "application_planned",
+  "application_applied",
+];
+
 const FILTER_OPTIONS: Array<{ key: CalendarLayerKey; label: string }> = [
   { key: "posting_deadline", label: "공고 마감일" },
   { key: "posting_bookmark", label: "찜한 공고" },
@@ -23,6 +83,15 @@ const FILTER_OPTIONS: Array<{ key: CalendarLayerKey; label: string }> = [
 
 const WEEKDAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const MAX_VISIBLE_EVENTS = 3;
+
+function resolveEventLayer(event: CalendarEvent): CalendarLayerKey {
+  for (const layer of LAYER_PRIORITY) {
+    if (event.layer_keys.includes(layer)) {
+      return layer;
+    }
+  }
+  return event.layer_keys[0] ?? "posting_bookmark";
+}
 
 function parseIsoDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
@@ -61,50 +130,25 @@ function sortEvents(left: CalendarEvent, right: CalendarEvent) {
   return left.company_name.localeCompare(right.company_name, "ko");
 }
 
+const LAYER_TONE: Record<CalendarLayerKey, "neutral" | "info" | "success" | "warning"> = {
+  posting_deadline: "warning",
+  posting_todo: "warning",
+  posting_bookmark: "success",
+  application_planned: "warning",
+  application_applied: "info",
+};
+
 function toneForEvent(event: CalendarEvent): "neutral" | "info" | "success" | "warning" {
-  if (event.kind === "application") {
-    return event.layer_keys.includes("application_applied") ? "info" : "warning";
-  }
-  if (event.layer_keys.includes("posting_todo")) {
-    return "warning";
-  }
-  if (event.layer_keys.includes("posting_bookmark")) {
-    return "success";
-  }
-  return "neutral";
+  return LAYER_TONE[resolveEventLayer(event)] ?? "neutral";
 }
 
 function cardStyleForEvent(event: CalendarEvent, selected: boolean): CSSProperties {
-  const palette =
-    event.kind === "application"
-      ? {
-          backgroundColor: selected ? "#dbeafe" : "#eff6ff",
-          borderColor: selected ? "#60a5fa" : "#bfdbfe",
-          color: "#1e3a8a",
-        }
-      : {
-          backgroundColor: selected ? "#d1fae5" : "#ecfdf5",
-          borderColor: selected ? "#34d399" : "#a7f3d0",
-          color: "#065f46",
-        };
-
-  if (event.layer_keys.includes("posting_todo")) {
-    return {
-      backgroundColor: selected ? "#fed7aa" : "#fff7ed",
-      borderColor: selected ? "#fb923c" : "#fdba74",
-      color: "#9a3412",
-    };
-  }
-
-  if (event.layer_keys.includes("application_planned")) {
-    return {
-      backgroundColor: selected ? "#fde68a" : "#fef3c7",
-      borderColor: selected ? "#f59e0b" : "#fcd34d",
-      color: "#92400e",
-    };
-  }
-
-  return palette;
+  const palette = LAYER_PALETTES[resolveEventLayer(event)];
+  return {
+    backgroundColor: selected ? palette.backgroundSelected : palette.background,
+    borderColor: selected ? palette.borderSelected : palette.border,
+    color: palette.color,
+  };
 }
 
 export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
@@ -160,6 +204,7 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
       >
         {FILTER_OPTIONS.map((filter) => {
           const checked = activeLayers.includes(filter.key);
+          const palette = LAYER_PALETTES[filter.key];
           return (
             <label
               key={filter.key}
@@ -168,7 +213,7 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
                 alignItems: "center",
                 gap: 8,
                 fontSize: 12,
-                color: checked ? "var(--rw-foreground)" : "var(--rw-muted)",
+                color: "var(--rw-foreground)",
                 cursor: "pointer",
               }}
             >
@@ -176,7 +221,38 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
                 type="checkbox"
                 checked={checked}
                 onChange={() => toggleLayer(filter.key)}
+                style={{
+                  position: "absolute",
+                  width: 1,
+                  height: 1,
+                  padding: 0,
+                  margin: -1,
+                  overflow: "hidden",
+                  clip: "rect(0,0,0,0)",
+                  whiteSpace: "nowrap",
+                  border: 0,
+                }}
               />
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 16,
+                  height: 16,
+                  borderRadius: 4,
+                  border: `1px solid ${checked ? palette.checkboxFill : "#cbd5e1"}`,
+                  backgroundColor: checked ? palette.checkboxFill : "#ffffff",
+                  color: "#ffffff",
+                  fontSize: 11,
+                  lineHeight: 1,
+                  fontWeight: 700,
+                  transition: "background-color 120ms ease, border-color 120ms ease",
+                }}
+              >
+                {checked ? "✓" : ""}
+              </span>
               {filter.label}
             </label>
           );
@@ -295,6 +371,7 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
                     {visibleDayEvents.map((event) => {
                       const selected = selectedEventId === event.id;
                       const palette = cardStyleForEvent(event, selected);
+                      const dotColor = LAYER_PALETTES[resolveEventLayer(event)].checkboxFill;
                       return (
                         <button
                           key={event.id}
@@ -320,7 +397,7 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
                               width: 6,
                               height: 6,
                               borderRadius: 999,
-                              backgroundColor: palette.color,
+                              backgroundColor: dotColor,
                               flexShrink: 0,
                             }}
                           />
