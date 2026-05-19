@@ -1,5 +1,6 @@
 import type {
   Application,
+  CalendarMonth,
   CoverLetterItem,
   CoverLetterItemPage,
   Dashboard,
@@ -186,6 +187,16 @@ export async function getApplications(): Promise<Application[]> {
   });
 }
 
+export async function getCalendarMonth(month: string): Promise<CalendarMonth> {
+  const suffix = buildSearchSuffix({ month });
+  return request<CalendarMonth>(`/api/calendar${suffix}`, {
+    next: {
+      revalidate: 30,
+      tags: [CACHE_TAGS.postings, CACHE_TAGS.applications],
+    },
+  });
+}
+
 export async function getApplication(applicationId: number): Promise<Application> {
   return request<Application>(`/api/applications/${applicationId}`, {
     next: {
@@ -218,6 +229,19 @@ export async function getCoverLetterLibraryPage(filters?: {
     next: {
       revalidate: 15,
       tags: [CACHE_TAGS.coverLetter],
+    },
+  });
+}
+
+export async function getSourceSyncRuns(
+  sourceKey: string,
+  limit: number = 20,
+): Promise<SyncRun[]> {
+  const suffix = buildSearchSuffix({ limit });
+  return request<SyncRun[]>(`/api/sources/${sourceKey}/sync-runs${suffix}`, {
+    next: {
+      revalidate: 15,
+      tags: [CACHE_TAGS.sources, `sync-runs:${sourceKey}`],
     },
   });
 }

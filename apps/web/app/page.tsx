@@ -3,7 +3,6 @@ import Link from "next/link";
 import { ApiUnavailable } from "@/components/ui/api-unavailable";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { SourceSyncControls } from "@/components/ui/source-sync-controls";
 import {
   pageBodyStyle,
   sectionTitleStyle,
@@ -12,7 +11,7 @@ import {
 } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getDashboard } from "@/lib/api";
-import { formatDate, formatDateTime, shorten } from "@/lib/format";
+import { formatDate, shorten } from "@/lib/format";
 import {
   getApplicationStatusLabel,
   getPostingCurationLabel,
@@ -65,87 +64,6 @@ export default async function Home() {
       />
 
       <div style={pageBodyStyle}>
-        {/* Sources */}
-        <section>
-          <div style={sectionLabelRow}>
-            <h2 style={sectionTitleStyle}>등록된 플랫폼</h2>
-            <span style={{ fontSize: 11, color: "var(--rw-muted)" }}>
-              크롤링 플랫폼과 수동 등록 플랫폼을 함께 관리합니다.
-            </span>
-          </div>
-          {dashboard.sources.length === 0 ? (
-            <EmptyState
-              title="등록된 플랫폼이 없습니다."
-              description="크롤러를 등록하거나 수동 공고/지원을 추가하면 플랫폼이 생성됩니다."
-            />
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>이름</th>
-                  <th style={thStyle}>URL</th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>유형</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>누적 공고</th>
-                  <th style={thStyle}>마지막 동기화</th>
-                  <th style={{ ...thStyle, textAlign: "right", width: 320 }}>액션</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dashboard.sources.map((source) => (
-                  <tr key={source.key}>
-                    <td style={{ ...tdStyle, fontWeight: 600 }}>{source.name}</td>
-                    <td
-                      style={{
-                        ...tdStyle,
-                        color: "var(--rw-muted)",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                      }}
-                    >
-                      {source.base_url || "—"}
-                    </td>
-                    <td style={{ ...tdStyle, textAlign: "center" }}>
-                      <div style={{ display: "flex", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
-                        <StatusBadge
-                          label={source.supports_sync ? "크롤링" : "수동"}
-                          tone={source.supports_sync ? "info" : "warning"}
-                        />
-                        <StatusBadge
-                          label={source.is_enabled ? "활성" : "비활성"}
-                          tone={source.is_enabled ? "success" : "neutral"}
-                        />
-                      </div>
-                    </td>
-                    <td
-                      style={{
-                        ...tdStyle,
-                        textAlign: "right",
-                        fontVariantNumeric: "tabular-nums",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {source.posting_count.toLocaleString()}
-                    </td>
-                    <td style={{ ...tdStyle, color: "var(--rw-muted)" }}>
-                      {formatDateTime(source.last_synced_at)}
-                    </td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>
-                      {source.supports_sync ? (
-                        <SourceSyncControls sourceKey={source.key} />
-                      ) : (
-                        <span style={{ fontSize: 11, color: "var(--rw-muted)" }}>
-                          수동 등록 플랫폼
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-
-        {/* Two-column split */}
         <section
           style={{
             display: "grid",
@@ -156,14 +74,22 @@ export default async function Home() {
           <div style={{ borderRight: "1px solid var(--rw-border)", minWidth: 0 }}>
             <div style={sectionLabelRow}>
               <h2 style={sectionTitleStyle}>최근 공고</h2>
-              <Link href="/postings" style={{ fontSize: 11, color: "var(--rw-accent)", fontWeight: 600 }}>
-                공고 전체 보기 →
-              </Link>
+              <div style={{ display: "flex", gap: 12 }}>
+                <Link
+                  href="/sources"
+                  style={{ fontSize: 11, color: "var(--rw-muted)", fontWeight: 600 }}
+                >
+                  동기화 →
+                </Link>
+                <Link href="/postings" style={{ fontSize: 11, color: "var(--rw-accent)", fontWeight: 600 }}>
+                  공고 전체 보기 →
+                </Link>
+              </div>
             </div>
             {dashboard.recent_postings.length === 0 ? (
               <EmptyState
                 title="아직 수집된 공고가 없습니다."
-                description="위 동기화 버튼으로 첫 공고를 수집해보세요."
+                description="동기화 페이지에서 플랫폼을 골라 첫 공고를 수집해보세요."
               />
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -227,129 +153,62 @@ export default async function Home() {
             )}
           </div>
 
-          {/* Right column: apps + sync runs */}
+          {/* Right column: applications */}
           <div style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>
-            <div>
-              <div style={sectionLabelRow}>
-                <h2 style={sectionTitleStyle}>최근 지원 현황</h2>
-                <Link
-                  href="/applications"
-                  style={{ fontSize: 11, color: "var(--rw-accent)", fontWeight: 600 }}
-                >
-                  전체 보기 →
-                </Link>
-              </div>
-              {dashboard.recent_applications.length === 0 ? (
-                <EmptyState
-                  title="지원 현황이 없습니다."
-                  description="공고 목록에서 이력서를 골라 지원 현황을 생성하세요."
-                />
-              ) : (
-                <div>
-                  {dashboard.recent_applications.slice(0, 6).map((application) => (
-                    <div
-                      key={application.id}
-                      style={{
-                        padding: "10px 24px",
-                        borderBottom: "1px solid var(--rw-border)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 12,
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600 }}>
-                          {application.company_name}
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 2,
-                            fontSize: 11,
-                            color: "var(--rw-muted)",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {application.source_name} · {application.job_title} ·{" "}
-                          {application.resume_template_title ?? "수동 편집"}
-                        </div>
-                      </div>
-                      <StatusBadge
-                        label={getApplicationStatusLabel(application.status)}
-                        tone={statusTone(application.status)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div style={sectionLabelRow}>
+              <h2 style={sectionTitleStyle}>최근 지원 현황</h2>
+              <Link
+                href="/applications"
+                style={{ fontSize: 11, color: "var(--rw-accent)", fontWeight: 600 }}
+              >
+                전체 보기 →
+              </Link>
             </div>
-
-            <div style={{ borderTop: "1px solid var(--rw-border)" }}>
-              <div style={sectionLabelRow}>
-                <h2 style={sectionTitleStyle}>동기화 이력</h2>
-              </div>
-              {dashboard.recent_sync_runs.length === 0 ? (
-                <EmptyState
-                  title="동기화 이력이 없습니다."
-                  description="첫 수집을 실행하면 결과가 여기에 기록됩니다."
-                />
-              ) : (
-                <div>
-                  {dashboard.recent_sync_runs.slice(0, 6).map((run) => (
-                    <div
-                      key={run.id}
-                      style={{
-                        padding: "10px 24px",
-                        borderBottom: "1px solid var(--rw-border)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 12,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            fontFamily: "var(--font-mono)",
-                          }}
-                        >
-                          run #{run.id}
-                        </span>
-                        <StatusBadge label={run.status} tone={statusTone(run.status)} />
+            {dashboard.recent_applications.length === 0 ? (
+              <EmptyState
+                title="지원 현황이 없습니다."
+                description="공고 목록에서 이력서를 골라 지원 현황을 생성하세요."
+              />
+            ) : (
+              <div>
+                {dashboard.recent_applications.slice(0, 10).map((application) => (
+                  <div
+                    key={application.id}
+                    style={{
+                      padding: "10px 24px",
+                      borderBottom: "1px solid var(--rw-border)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>
+                        {application.company_name}
                       </div>
                       <div
                         style={{
-                          marginTop: 4,
+                          marginTop: 2,
                           fontSize: 11,
                           color: "var(--rw-muted)",
-                          fontVariantNumeric: "tabular-nums",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        {formatDateTime(run.started_at)} · +{run.inserted_count} / ~{run.updated_count}
+                        {application.source_name} · {application.job_title} ·{" "}
+                        {application.resume_template_title ?? "수동 편집"}
                       </div>
-                      {run.message ? (
-                        <div
-                          style={{
-                            marginTop: 2,
-                            fontSize: 11,
-                            color: "var(--rw-muted)",
-                          }}
-                        >
-                          {run.message}
-                        </div>
-                      ) : null}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    <StatusBadge
+                      label={getApplicationStatusLabel(application.status)}
+                      tone={statusTone(application.status)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </div>

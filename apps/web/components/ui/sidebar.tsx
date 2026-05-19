@@ -4,11 +4,13 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useSyncExternalStore } from "react";
 import {
+  HiOutlineCalendar,
   HiOutlineChartBar,
   HiOutlineClipboardList,
   HiOutlineDocumentText,
   HiOutlineBriefcase,
   HiOutlineBookmark,
+  HiOutlineRefresh,
   HiChevronDoubleLeft,
   HiChevronDoubleRight,
 } from "react-icons/hi";
@@ -24,6 +26,8 @@ type NavItem = {
 
 const navigation: NavItem[] = [
   { href: "/", label: "대시보드", icon: HiOutlineChartBar },
+  { href: "/calendar", label: "캘린더", icon: HiOutlineCalendar },
+  { href: "/sources", label: "동기화", icon: HiOutlineRefresh },
   { href: "/postings", label: "공고", icon: HiOutlineClipboardList },
   { href: "/postings?tab=todo", label: "작성예정", icon: HiOutlineClipboardList },
   { href: "/postings?tab=bookmarked", label: "찜한 공고", icon: HiOutlineBookmark },

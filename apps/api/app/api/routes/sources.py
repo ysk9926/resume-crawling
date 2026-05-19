@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import CRAWL_INFO_CACHE_TTL_SECONDS, LOOKUP_CACHE_TTL_SECONDS
 from app.crawlers.registry import get_crawler
 from app.database import get_db
-from app.models import JobPosting, Source
+from app.models import JobPosting, JobSyncRun, Source
 from app.schemas import (
     JobSyncRunOut,
     SourceCrawlInfoOut,
@@ -52,6 +52,24 @@ def sync_source(
     if sync_run.status == "failed":
         raise HTTPException(status_code=502, detail=sync_run.message or "Sync failed")
     return JobSyncRunOut.model_validate(sync_run)
+
+
+@router.get("/{source_key}/sync-runs", response_model=list[JobSyncRunOut])
+def list_source_sync_runs(
+    source_key: str,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+) -> list[JobSyncRunOut]:
+    source = db.scalar(select(Source).where(Source.key == source_key))
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"Source not found: {source_key}")
+    runs = db.scalars(
+        select(JobSyncRun)
+        .where(JobSyncRun.source_id == source.id)
+        .order_by(JobSyncRun.started_at.desc())
+        .limit(max(1, min(limit, 100)))
+    ).all()
+    return [JobSyncRunOut.model_validate(run) for run in runs]
 
 
 @router.get("/{source_key}/crawl-info", response_model=SourceCrawlInfoOut)

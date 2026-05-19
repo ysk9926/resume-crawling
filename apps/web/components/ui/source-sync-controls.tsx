@@ -113,13 +113,13 @@ function parseIndustryFilters(value: string): RememberIndustryFilter[] | undefin
 }
 
 const filterPanelStyle: CSSProperties = {
-  width: 320,
-  maxWidth: "100%",
-  padding: 10,
+  width: "100%",
+  padding: 16,
   border: "1px solid var(--rw-border)",
+  borderRadius: 4,
   backgroundColor: "#ffffff",
   display: "grid",
-  gap: 10,
+  gap: 12,
 };
 
 const filterLabelStyle: CSSProperties = {
@@ -148,9 +148,13 @@ const helperTextStyle: CSSProperties = {
 
 type SourceSyncControlsProps = {
   sourceKey: string;
+  variant?: "compact" | "inline";
 };
 
-export function SourceSyncControls({ sourceKey }: SourceSyncControlsProps) {
+export function SourceSyncControls({
+  sourceKey,
+  variant = "compact",
+}: SourceSyncControlsProps) {
   const router = useRouter();
   const isRemember = sourceKey === "remember";
 
@@ -271,9 +275,40 @@ export function SourceSyncControls({ sourceKey }: SourceSyncControlsProps) {
     );
   };
 
+  const isInline = variant === "inline";
+
   return (
-    <div style={{ display: "grid", justifyItems: "end", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+    <div
+      style={{
+        display: "grid",
+        justifyItems: isInline ? "stretch" : "end",
+        gap: isInline ? 12 : 6,
+        width: "100%",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          flexWrap: "wrap",
+          justifyContent: isInline ? "flex-start" : "flex-end",
+        }}
+      >
+        {isInline ? (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: "var(--rw-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              marginRight: 4,
+            }}
+          >
+            범위
+          </span>
+        ) : null}
         <input
           aria-label={`${sourceKey} 시작 페이지`}
           inputMode="numeric"
@@ -317,6 +352,26 @@ export function SourceSyncControls({ sourceKey }: SourceSyncControlsProps) {
         >
           {isSyncPending ? "동기화 중..." : "범위 동기화"}
         </button>
+        {isInline && crawlInfo ? (
+          <span
+            style={{
+              fontSize: 12,
+              color: "var(--rw-foreground)",
+              backgroundColor: "var(--rw-subtle)",
+              border: "1px solid var(--rw-border)",
+              borderRadius: 2,
+              padding: "4px 10px",
+              fontVariantNumeric: "tabular-nums",
+              marginLeft: 4,
+            }}
+          >
+            총 {crawlInfo.total_pages.toLocaleString()}페이지 ·{" "}
+            {crawlInfo.total_items.toLocaleString()}건
+          </span>
+        ) : null}
+        {isInline && isInfoPending ? (
+          <span style={{ fontSize: 11, color: "var(--rw-muted)" }}>조회 중...</span>
+        ) : null}
       </div>
 
       {isRemember ? (
@@ -458,16 +513,27 @@ export function SourceSyncControls({ sourceKey }: SourceSyncControlsProps) {
         </div>
       ) : null}
 
-      <div style={{ fontSize: 11, color: "var(--rw-muted)", minHeight: 16, textAlign: "right" }}>
-        {crawlInfo ? `총 ${crawlInfo.total_pages.toLocaleString()}페이지 · ${crawlInfo.total_items.toLocaleString()}건` : null}
-      </div>
+      {isInline ? null : (
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--rw-muted)",
+            minHeight: 16,
+            textAlign: "right",
+          }}
+        >
+          {crawlInfo
+            ? `총 ${crawlInfo.total_pages.toLocaleString()}페이지 · ${crawlInfo.total_items.toLocaleString()}건`
+            : null}
+        </div>
+      )}
       <div
         aria-live="polite"
         style={{
           color: message?.includes("동기화") ? "var(--rw-info)" : "var(--rw-error)",
           fontSize: 11,
           minHeight: 16,
-          textAlign: "right",
+          textAlign: isInline ? "left" : "right",
           width: "100%",
         }}
       >
