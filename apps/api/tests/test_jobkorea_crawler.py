@@ -141,3 +141,43 @@ def test_crawl_parses_rows_with_relative_and_absolute_dates() -> None:
         "List_GI/GIB_Read_homepage_Link.asp?sc=614&GI_NO=50893054|49173000|C04|0|6|0"
     )
     assert "GS그룹 계열사" in second.normalized_content
+
+
+def test_parse_deadline_keeps_future_month_day_in_current_year() -> None:
+    crawler = JobKoreaCrawler(
+        client=StubClient(),
+        today_provider=lambda: date(2026, 5, 19),
+    )
+
+    # ~06/30 은 today 기준 +42일 — 35일 컷오프로 작년에 빠지면 안 됨.
+    assert crawler._parse_deadline("~06/30 (화)") == date(2026, 6, 30)
+
+
+def test_parse_deadline_keeps_long_term_deadline_in_current_year() -> None:
+    crawler = JobKoreaCrawler(
+        client=StubClient(),
+        today_provider=lambda: date(2026, 4, 28),
+    )
+
+    # 상시채용/장기 모집: ~12/31 은 8개월 뒤 — 같은 해로 인식해야 함.
+    assert crawler._parse_deadline("~12/31 (목)") == date(2026, 12, 31)
+
+
+def test_parse_deadline_rolls_over_to_next_year_when_past() -> None:
+    crawler = JobKoreaCrawler(
+        client=StubClient(),
+        today_provider=lambda: date(2026, 12, 20),
+    )
+
+    # 12월 말 시점에 ~01/15 표기는 내년 1월이어야 함.
+    assert crawler._parse_deadline("~01/15 (수)") == date(2027, 1, 15)
+
+
+def test_parse_posted_at_still_resolves_recent_month_day_in_current_year() -> None:
+    crawler = JobKoreaCrawler(
+        client=StubClient(),
+        today_provider=lambda: date(2026, 5, 19),
+    )
+
+    # 등록일은 과거 지향: 04/30 은 올해 4월 30일로 해석돼야 함.
+    assert crawler._parse_posted_at("04/30 (목) 등록") == date(2026, 4, 30)

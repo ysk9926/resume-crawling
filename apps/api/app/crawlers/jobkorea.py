@@ -286,7 +286,7 @@ class JobKoreaCrawler:
         month_day = self._parse_month_day(label)
         if month_day is not None:
             month, day = month_day
-            return self._resolve_month_day(month, day)
+            return self._resolve_month_day(month, day, prefer_future=True)
 
         return None
 
@@ -296,12 +296,24 @@ class JobKoreaCrawler:
             return None
         return (int(match.group(1)), int(match.group(2)))
 
-    def _resolve_month_day(self, month: int, day: int) -> date | None:
+    def _resolve_month_day(
+        self, month: int, day: int, prefer_future: bool = False
+    ) -> date | None:
         today = self._today_provider()
         try:
             candidate = date(today.year, month, day)
         except ValueError:
             return None
+
+        if prefer_future:
+            # 잡코리아 마감일 표기 ~MM/DD에는 연도가 없지만, 등록된 공고의 마감은
+            # 반드시 today 이후다. 같은 해 후보가 이미 지났다면 내년으로 옮긴다.
+            if candidate < today:
+                try:
+                    return date(today.year + 1, month, day)
+                except ValueError:
+                    return None
+            return candidate
 
         if candidate > today + timedelta(days=35):
             try:
