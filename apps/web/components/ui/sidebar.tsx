@@ -86,7 +86,12 @@ function isActive(
   tabParam: string | null,
 ): boolean {
   const [itemPath, itemQuery = ""] = itemHref.split("?");
-  if (itemPath !== pathname) return false;
+  if (itemPath !== pathname) {
+    if (itemPath !== "/" && pathname.startsWith(`${itemPath}/`)) {
+      return true;
+    }
+    return false;
+  }
   if (itemPath === "/postings") {
     const itemParams = new URLSearchParams(itemQuery);
     const itemTab = itemParams.get("tab") ?? "all";

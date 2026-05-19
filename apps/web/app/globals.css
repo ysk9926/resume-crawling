@@ -77,3 +77,115 @@ button {
 textarea {
   resize: vertical;
 }
+
+.rw-application-row:hover {
+  background-color: var(--rw-row-hover);
+}
+
+.rw-application-row:focus-visible {
+  outline: 2px solid var(--rw-accent);
+  outline-offset: -2px;
+}
+
+.rw-application-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--rw-border);
+  border-radius: 6px;
+  background: var(--rw-background);
+  color: var(--rw-foreground);
+  box-shadow: 0 24px 60px -20px rgba(15, 23, 42, 0.25),
+    0 8px 24px -12px rgba(15, 23, 42, 0.15);
+  overflow: hidden;
+}
+
+.rw-application-modal::backdrop {
+  background-color: rgba(15, 23, 42, 0.35);
+}
+
+.rw-manual-application-modal {
+  width: min(960px, calc(100vw - 48px));
+}
+
+.rw-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  position: relative;
+}
+
+.rw-timeline::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background-color: var(--rw-border);
+}
+
+.rw-timeline-item {
+  position: relative;
+  padding-left: 28px;
+  padding-bottom: 18px;
+}
+
+.rw-timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.rw-timeline-dot {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background-color: var(--rw-muted);
+  border: 3px solid var(--rw-background);
+  box-shadow: 0 0 0 1px var(--rw-border);
+}
+
+.rw-timeline-dot--info {
+  background-color: var(--rw-info);
+}
+
+.rw-timeline-dot--success {
+  background-color: var(--rw-success);
+}
+
+.rw-timeline-dot--warning {
+  background-color: var(--rw-warning);
+}
+
+.rw-timeline-dot--danger {
+  background-color: var(--rw-error);
+}
+
+.rw-timeline-content {
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rw-application-modal[open] {
+    animation: rw-modal-pop 160ms ease-out;
+  }
+}
+
+@keyframes rw-modal-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
