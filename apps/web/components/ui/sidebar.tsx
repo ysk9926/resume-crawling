@@ -24,15 +24,35 @@ type NavItem = {
   icon: IconType;
 };
 
-const navigation: NavItem[] = [
-  { href: "/", label: "대시보드", icon: HiOutlineChartBar },
-  { href: "/calendar", label: "캘린더", icon: HiOutlineCalendar },
-  { href: "/sources", label: "동기화", icon: HiOutlineRefresh },
-  { href: "/postings", label: "공고", icon: HiOutlineClipboardList },
-  { href: "/postings?tab=todo", label: "작성예정", icon: HiOutlineClipboardList },
-  { href: "/postings?tab=bookmarked", label: "찜한 공고", icon: HiOutlineBookmark },
-  { href: "/resumes", label: "이력서", icon: HiOutlineDocumentText },
-  { href: "/applications", label: "지원 현황", icon: HiOutlineBriefcase },
+type NavSection = {
+  title: string;
+  items: NavItem[];
+};
+
+const navigationSections: NavSection[] = [
+  {
+    title: "개요",
+    items: [
+      { href: "/calendar", label: "캘린더", icon: HiOutlineCalendar },
+      { href: "/dashboard", label: "대시보드", icon: HiOutlineChartBar },
+    ],
+  },
+  {
+    title: "공고 관리",
+    items: [
+      { href: "/sources", label: "동기화", icon: HiOutlineRefresh },
+      { href: "/postings", label: "공고", icon: HiOutlineClipboardList },
+      { href: "/postings?tab=todo", label: "작성예정", icon: HiOutlineClipboardList },
+      { href: "/postings?tab=bookmarked", label: "찜한 공고", icon: HiOutlineBookmark },
+    ],
+  },
+  {
+    title: "지원 관리",
+    items: [
+      { href: "/resumes", label: "이력서", icon: HiOutlineDocumentText },
+      { href: "/applications", label: "지원 현황", icon: HiOutlineBriefcase },
+    ],
+  },
 ];
 
 function NavLink({
@@ -191,13 +211,38 @@ export function Sidebar() {
       </div>
 
       <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto", minHeight: 0 }}>
-        {navigation.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            active={isActive(item.href, pathname, tabParam)}
-            collapsed={collapsed}
-          />
+        {navigationSections.map((section, sectionIndex) => (
+          <section
+            key={section.title}
+            style={{
+              paddingTop: sectionIndex === 0 ? 0 : 8,
+              marginTop: sectionIndex === 0 ? 0 : 8,
+              borderTop: sectionIndex === 0 ? "none" : "1px solid var(--rw-border)",
+            }}
+          >
+            {collapsed ? null : (
+              <div
+                style={{
+                  padding: "0 20px 6px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "var(--rw-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                {section.title}
+              </div>
+            )}
+            {section.items.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                active={isActive(item.href, pathname, tabParam)}
+                collapsed={collapsed}
+              />
+            ))}
+          </section>
         ))}
       </nav>
 

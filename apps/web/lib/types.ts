@@ -107,6 +107,37 @@ export type PaginatedResponse<T> = {
 
 export type JobPostingPage = PaginatedResponse<JobPosting>;
 
+export type CalendarLayerKey =
+  | "posting_deadline"
+  | "posting_bookmark"
+  | "posting_todo"
+  | "application_planned"
+  | "application_applied";
+
+export type CalendarEventKind = "posting" | "application";
+
+export type CalendarEvent = {
+  id: string;
+  kind: CalendarEventKind;
+  layer_keys: CalendarLayerKey[];
+  date: string;
+  title: string;
+  company_name: string;
+  source_label: string;
+  status_label: string;
+  href: string;
+  detail_url: string | null;
+  external_apply_url: string | null;
+  badges: string[];
+};
+
+export type CalendarMonth = {
+  month: string;
+  month_start: string;
+  month_end: string;
+  events: CalendarEvent[];
+};
+
 export type ResumeTemplate = {
   id: number;
   title: string;

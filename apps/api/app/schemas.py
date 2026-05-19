@@ -145,6 +145,28 @@ class PaginatedJobPostingOut(BaseModel):
     has_next: bool
 
 
+class CalendarEventOut(BaseModel):
+    id: str
+    kind: Literal["posting", "application"]
+    layer_keys: list[str]
+    date: date
+    title: str
+    company_name: str
+    source_label: str
+    status_label: str
+    href: str
+    detail_url: str | None = None
+    external_apply_url: str | None = None
+    badges: list[str] = []
+
+
+class CalendarMonthOut(BaseModel):
+    month: str
+    month_start: date
+    month_end: date
+    events: list[CalendarEventOut]
+
+
 class ResumeTemplateCreate(BaseModel):
     title: str
     summary: str = ""

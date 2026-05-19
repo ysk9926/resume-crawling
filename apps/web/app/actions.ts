@@ -46,6 +46,7 @@ function parseCheckbox(value: FormDataEntryValue | null) {
 
 function revalidateAll() {
   revalidatePath("/");
+  revalidatePath("/calendar");
   revalidatePath("/postings");
   revalidatePath("/resumes");
   revalidatePath("/applications");

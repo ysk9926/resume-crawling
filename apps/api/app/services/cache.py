@@ -12,6 +12,7 @@ READ_CACHE_PREFIXES = (
     "dashboard:",
     "sources:",
     "postings:",
+    "calendar:",
     "resumes:",
     "applications:",
     "cover-letter:",
