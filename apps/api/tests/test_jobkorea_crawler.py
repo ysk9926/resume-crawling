@@ -3,6 +3,10 @@ from datetime import date
 import httpx
 
 from app.crawlers.jobkorea import JobKoreaCrawler
+from app.crawlers.jobkorea_filters import (
+    build_jobkorea_list_request_payload,
+    parse_jobkorea_filter_options,
+)
 
 
 LIST_HTML = """
@@ -91,7 +95,11 @@ LIST_HTML = """
 
 
 class StubClient:
+    def __init__(self) -> None:
+        self.posts: list[dict[str, object]] = []
+
     def post(self, url: str, data: dict[str, str] | None = None) -> httpx.Response:
+        self.posts.append({"url": url, "data": data})
         request = httpx.Request("POST", url, data=data)
         return httpx.Response(200, text=LIST_HTML, request=request)
 
@@ -99,17 +107,193 @@ class StubClient:
         return None
 
 
-def test_get_crawl_info_parses_total_pages_and_items() -> None:
-    crawler = JobKoreaCrawler(
-        client=StubClient(),
-        today_provider=lambda: date(2026, 5, 17),
+FILTER_OPTIONS_HTML = """
+<div>
+  <dl class="job circleType dev-tab dev-duty" data-category="duty">
+    <dd class="ly_sub">
+      <ul data-category="duty">
+        <li class="item" data-value-json='{"groupCode":10031,"groupName":"AI·개발·데이터","subList":[{"subCode":1000254,"subName":"백엔드 개발자"}]}'></li>
+      </ul>
+    </dd>
+  </dl>
+  <dl class="loc circleType dev-tab dev-local" data-category="local">
+    <dd class="ly_sub">
+      <ul data-category="local">
+        <li class="item" data-value-json='{"groupCode":"I000","groupName":"서울","subList":[{"subCode":"I010","subName":"강남구"}]}'></li>
+      </ul>
+    </dd>
+  </dl>
+  <dl class="exp circleType dev-tab dev-career">
+    <input type="checkbox" name="career" value="2" data-name="1~3년" />
+  </dl>
+  <dl class="edu circleType dev-tab dev-edu">
+    <input type="checkbox" name="edu" value="5" data-name="대학교졸업(4년)" />
+  </dl>
+  <dl class="cty circleType dev-tab dev-cotype">
+    <input type="checkbox" name="cotype" value="1" data-name="대기업" />
+  </dl>
+  <dl class="hty circleType dev-tab dev-jobtype">
+    <input type="checkbox" name="jobtype" value="1" data-name="정규직" />
+  </dl>
+  <dl class="ids dev-industry dev-tab" data-category="industry">
+    <dd class="ly_sub">
+      <ul data-category="industry">
+        <li class="item" data-value-json='{"groupCode":10007,"groupName":"IT·정보통신업","subList":[{"subCode":1000067,"subName":"솔루션·SI·CRM·ERP"}]}'></li>
+      </ul>
+    </dd>
+  </dl>
+  <dl class="ppp dev-tab dev-position">
+    <dl class="detail_sec circleType">
+      <dt><p class="tit">직급</p></dt>
+      <dd><input type="checkbox" name="position1" value="1" data-name="사원급" /></dd>
+    </dl>
+    <dl class="detail_sec circleType">
+      <dt><p class="tit">직책</p></dt>
+      <dd><input type="checkbox" name="position2" value="8" data-name="팀장/매니저/실장" /></dd>
+    </dl>
+    <input type="checkbox" name="pay" value="3" data-name="3000 ~ 3500만원" />
+    <select name="paytype">
+      <option value="1">연봉</option>
+      <option value="2">월급</option>
+    </select>
+  </dl>
+  <dl class="mjr dev-tab dev-major" data-category="major">
+    <dd class="ly_sub">
+      <div class="detail_sec circleType">
+        <dd class="certify">
+          <input type="checkbox" name="major" value="21400" data-name="비즈니스애널리틱스학과" />
+        </dd>
+      </div>
+    </dd>
+  </dl>
+  <dl class="lic dev-tab dev-license">
+    <dd class="ly_sub">
+      <div class="detail_sec circleType">
+        <dt><p class="tit">건설·건축·토목</p></dt>
+        <dd class="certify">
+          <input type="checkbox" name="license" value="1205020" data-name="건축기사" />
+        </dd>
+      </div>
+    </dd>
+  </dl>
+  <dl class="prf dev-tab dev-pref">
+    <dd class="ly_sub">
+      <div class="detail_sec circleType">
+        <dt><p class="tit">지원자격</p></dt>
+        <dd class="certify">
+          <input type="checkbox" name="pref" value="21" data-name="운전가능자" />
+        </dd>
+      </div>
+    </dd>
+  </dl>
+  <dl class="bnf dev-tab dev-wel">
+    <dd class="ly_sub">
+      <div class="detail_sec circleType">
+        <dt><p class="tit">기본우대</p></dt>
+        <dd class="certify">
+          <input type="checkbox" name="wel" value="10" data-name="인센티브" />
+        </dd>
+      </div>
+    </dd>
+  </dl>
+</div>
+"""
+
+
+def test_build_jobkorea_list_request_payload_uses_default_preset_for_empty_filters() -> None:
+    payload = build_jobkorea_list_request_payload(page=3)
+
+    assert payload["page"] == "3"
+    assert payload["isDefault"] == "true"
+    assert payload["condition[duty]"] == "1000230,1000231,1000229"
+    assert payload["condition[local]"] == "I000,B000"
+    assert payload["condition[cotype]"] == "1,2,3,4,5,6,10,11,12,13"
+    assert payload["direct"] == "0"
+    assert payload["confirm"] == "0"
+
+
+def test_build_jobkorea_list_request_payload_maps_filter_fields() -> None:
+    payload = build_jobkorea_list_request_payload(
+        {
+            "duties": ["10031"],
+            "locals": ["I000", "B000"],
+            "career_codes": ["2"],
+            "career_start": 3,
+            "career_end": 5,
+            "education_codes": ["5"],
+            "company_type_codes": ["1", "4"],
+            "job_type_codes": ["1"],
+            "industry_codes": ["10007"],
+            "position_codes": ["1", "8"],
+            "salary_codes": ["5"],
+            "salary_type": "2",
+            "salary_input": 350,
+            "major_codes": ["21400"],
+            "license_codes": ["1205020"],
+            "preference_codes": ["21"],
+            "welfare_codes": ["10"],
+            "include_keywords": ["파이썬", "백엔드"],
+            "exclude_keywords": ["SI"],
+            "direct_apply_only": True,
+            "exclude_confirmed_postings": True,
+        },
+        page=2,
     )
+
+    assert payload["page"] == "2"
+    assert payload["isDefault"] == "false"
+    assert payload["direct"] == "1"
+    assert payload["confirm"] == "1"
+    assert payload["condition[duty]"] == "10031"
+    assert payload["condition[local]"] == "I000,B000"
+    assert payload["condition[career]"] == "2"
+    assert payload["condition[careerStart]"] == "3"
+    assert payload["condition[careerEnd]"] == "5"
+    assert payload["condition[edu]"] == "5"
+    assert payload["condition[cotype]"] == "1,4"
+    assert payload["condition[jobtype]"] == "1"
+    assert payload["condition[industry]"] == "10007"
+    assert payload["condition[position]"] == "1,8"
+    assert payload["condition[pay]"] == "5"
+    assert payload["condition[paytype]"] == "2"
+    assert payload["condition[payinput]"] == "350"
+    assert payload["condition[major]"] == "21400"
+    assert payload["condition[license]"] == "1205020"
+    assert payload["condition[pref]"] == "21"
+    assert payload["condition[wel]"] == "10"
+    assert payload["condition[textinclude]"] == "파이썬,백엔드"
+    assert payload["condition[textexclude]"] == "SI"
+
+
+def test_parse_jobkorea_filter_options_extracts_nested_and_grouped_values() -> None:
+    options = parse_jobkorea_filter_options(FILTER_OPTIONS_HTML)
+
+    assert options.duties[0].label == "AI·개발·데이터"
+    assert options.duties[0].children[0].code == "1000254"
+    assert options.locals[0].children[0].label == "강남구"
+    assert options.careers[0].label == "1~3년"
+    assert options.company_types[0].label == "대기업"
+    assert options.industries[0].children[0].label == "솔루션·SI·CRM·ERP"
+    assert options.positions[0].label == "직급"
+    assert options.positions[0].children[0].label == "사원급"
+    assert options.salary_ranges[0].label == "3000 ~ 3500만원"
+    assert options.salary_types[1].label == "월급"
+    assert options.majors[0].label == "비즈니스애널리틱스학과"
+    assert options.licenses[0].children[0].label == "건축기사"
+    assert options.preferences[0].children[0].code == "21"
+    assert options.welfare[0].children[0].label == "인센티브"
+
+
+def test_get_crawl_info_parses_total_pages_and_items() -> None:
+    client = StubClient()
+    crawler = JobKoreaCrawler(client=client, today_provider=lambda: date(2026, 5, 17))
 
     crawl_info = crawler.get_crawl_info()
 
     assert crawl_info.current_page == 1
     assert crawl_info.total_pages == 14
     assert crawl_info.total_items == 545
+    assert client.posts[0]["data"] == build_jobkorea_list_request_payload(page=1)
 
 
 def test_crawl_parses_rows_with_relative_and_absolute_dates() -> None:
@@ -141,6 +325,31 @@ def test_crawl_parses_rows_with_relative_and_absolute_dates() -> None:
         "List_GI/GIB_Read_homepage_Link.asp?sc=614&GI_NO=50893054|49173000|C04|0|6|0"
     )
     assert "GS그룹 계열사" in second.normalized_content
+
+
+def test_get_crawl_info_and_crawl_share_the_same_filter_payload() -> None:
+    client = StubClient()
+    filters = {
+        "duties": ["10031"],
+        "locals": ["I000"],
+        "career_start": 3,
+        "career_end": 7,
+        "direct_apply_only": True,
+        "exclude_confirmed_postings": True,
+    }
+    crawler = JobKoreaCrawler(
+        client=client,
+        today_provider=lambda: date(2026, 5, 17),
+        filters=filters,
+    )
+
+    crawl_info = crawler.get_crawl_info(page=2)
+    postings = crawler.crawl(start_page=2, end_page=2)
+
+    assert crawl_info.current_page == 2
+    assert len(postings) == 2
+    assert client.posts[0]["data"] == client.posts[1]["data"]
+    assert client.posts[0]["data"] == build_jobkorea_list_request_payload(filters, page=2)
 
 
 def test_parse_deadline_keeps_future_month_day_in_current_year() -> None:

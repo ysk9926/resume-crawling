@@ -37,12 +37,14 @@ export type JobKoreaFilterOption = {
 export type JobKoreaFilterOptions = {
   duties: JobKoreaFilterOption[];
   locals: JobKoreaFilterOption[];
+  careers: JobKoreaFilterOption[];
   educations: JobKoreaFilterOption[];
-  companyTypes: JobKoreaFilterOption[];
-  jobTypes: JobKoreaFilterOption[];
+  company_types: JobKoreaFilterOption[];
+  job_types: JobKoreaFilterOption[];
   industries: JobKoreaFilterOption[];
   positions: JobKoreaFilterOption[];
-  salaryTypes: JobKoreaFilterOption[];
+  salary_ranges: JobKoreaFilterOption[];
+  salary_types: JobKoreaFilterOption[];
   majors: JobKoreaFilterOption[];
   licenses: JobKoreaFilterOption[];
   preferences: JobKoreaFilterOption[];

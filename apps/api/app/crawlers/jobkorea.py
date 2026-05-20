@@ -11,34 +11,18 @@ import httpx
 from bs4 import BeautifulSoup, Tag
 
 from app.crawlers.base import CrawlInfo, CrawledJobPosting
-from app.utils.text import derive_tags, normalize_whitespace
-
-
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0 Safari/537.36"
+from app.crawlers.jobkorea_filters import (
+    LIST_API_URL,
+    PAGE_SIZE,
+    ROOT_URL,
+    SEARCH_PAGE_URL,
+    USER_AGENT,
+    build_jobkorea_list_request_payload,
 )
-ROOT_URL = "https://www.jobkorea.co.kr"
-LIST_API_URL = f"{ROOT_URL}/Recruit/Home/_GI_List/"
-SEARCH_PAGE_URL = f"{ROOT_URL}/recruit/joblist?menucode=local&localorder=1"
-PAGE_SIZE = 40
+from app.utils.text import derive_tags, normalize_whitespace
 POSTED_DAYS_AGO_PATTERN = re.compile(r"(\d+)\s*일\s*전")
 DEADLINE_D_DAY_PATTERN = re.compile(r"D-(\d+)")
 MONTH_DAY_PATTERN = re.compile(r"(\d{2})/(\d{2})")
-SEARCH_PAYLOAD = {
-    "isDefault": "true",
-    "condition[duty]": "1000230,1000231,1000229",
-    "condition[local]": "I000,B000",
-    "condition[cotype]": "1,2,3,4,5,6,10,11,12,13",
-    "condition[menucode]": "",
-    "direct": "0",
-    "order": "20",
-    "pagesize": str(PAGE_SIZE),
-    "tabindex": "0",
-    "onePick": "0",
-    "confirm": "0",
-    "profile": "0",
-}
 
 
 @dataclass(slots=True)
@@ -80,7 +64,7 @@ class JobKoreaCrawler:
         self._owns_client = client is None
         self._is_closed = False
         self._today_provider = today_provider or date.today
-        _ = filters
+        self._filters = filters
 
     def get_crawl_info(self, page: int = 1) -> CrawlInfo:
         if page < 1:
@@ -140,7 +124,7 @@ class JobKoreaCrawler:
         return postings
 
     def _fetch_list_page(self, page: int) -> BeautifulSoup:
-        payload = {**SEARCH_PAYLOAD, "page": str(page)}
+        payload = build_jobkorea_list_request_payload(self._filters, page=page)
         response = self.client.post(LIST_API_URL, data=payload)
         response.raise_for_status()
         return BeautifulSoup(response.text, "html.parser")

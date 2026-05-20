@@ -140,11 +140,13 @@ class JobKoreaFilterOption(BaseModel):
 class JobKoreaFilterOptionsOut(BaseModel):
     duties: list[JobKoreaFilterOption] = Field(default_factory=list)
     locals: list[JobKoreaFilterOption] = Field(default_factory=list)
+    careers: list[JobKoreaFilterOption] = Field(default_factory=list)
     educations: list[JobKoreaFilterOption] = Field(default_factory=list)
     company_types: list[JobKoreaFilterOption] = Field(default_factory=list)
     job_types: list[JobKoreaFilterOption] = Field(default_factory=list)
     industries: list[JobKoreaFilterOption] = Field(default_factory=list)
     positions: list[JobKoreaFilterOption] = Field(default_factory=list)
+    salary_ranges: list[JobKoreaFilterOption] = Field(default_factory=list)
     salary_types: list[JobKoreaFilterOption] = Field(default_factory=list)
     majors: list[JobKoreaFilterOption] = Field(default_factory=list)
     licenses: list[JobKoreaFilterOption] = Field(default_factory=list)
