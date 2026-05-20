@@ -9,6 +9,12 @@ from .config import REPO_ROOT
 from .crawlers.registry import list_source_definitions
 from .models import ResumeTemplate, Source
 
+LEGACY_PRIVATE_MASTER_TEMPLATE_TITLE = "윤승규 - 풀스택 마스터 이력서"
+LEGACY_PRIVATE_MASTER_TEMPLATE_MARKERS = (
+    "tmdrb9926@gmail.com",
+    "portfolio-pink-two-vymvu56oaw.vercel.app",
+)
+
 
 def seed_sources(session: Session) -> None:
     existing_list = session.scalars(select(Source)).all()
@@ -62,16 +68,43 @@ def _load_master_resume_template() -> tuple[str, str, str]:
     return title, summary, markdown.strip()
 
 
-def seed_resume_templates(session: Session) -> None:
-    if session.scalars(select(ResumeTemplate.id)).first() is not None:
-        return
-
-    title, summary, markdown = _load_master_resume_template()
-    session.add(
-        ResumeTemplate(
-            title=title,
-            summary=summary,
-            markdown_content=markdown,
+def _is_legacy_private_master_template(resume: ResumeTemplate) -> bool:
+    return (
+        resume.title == LEGACY_PRIVATE_MASTER_TEMPLATE_TITLE
+        or any(
+            marker in resume.markdown_content
+            for marker in LEGACY_PRIVATE_MASTER_TEMPLATE_MARKERS
         )
     )
+
+
+def seed_resume_templates(session: Session) -> None:
+    title, summary, markdown = _load_master_resume_template()
+    existing = session.scalars(select(ResumeTemplate)).all()
+    if not existing:
+        session.add(
+            ResumeTemplate(
+                title=title,
+                summary=summary,
+                markdown_content=markdown,
+            )
+        )
+        session.commit()
+        return
+
+    mutated = False
+    for resume in existing:
+        if resume.user_id is not None:
+            continue
+        if not _is_legacy_private_master_template(resume):
+            continue
+        resume.title = title
+        resume.summary = summary
+        resume.markdown_content = markdown
+        mutated = True
+
+    if mutated:
+        session.commit()
+        return
+
     session.commit()

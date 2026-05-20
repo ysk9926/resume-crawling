@@ -19,11 +19,31 @@ def test_seed_resume_templates_inserts_master_template_once() -> None:
         first = session.scalars(select(ResumeTemplate)).all()
 
         assert len(first) == 1
-        assert first[0].title == "윤승규 - 풀스택 마스터 이력서"
-        assert "ERP 팀 리더" in first[0].summary
-        assert "VEMONTES - 스킨케어 구독 커머스 플랫폼" in first[0].markdown_content
+        assert first[0].title == "샘플 - 풀스택 마스터 이력서"
+        assert "본인 정보로 교체" in first[0].summary
+        assert "이름: [이름]" in first[0].markdown_content
 
         seed_resume_templates(session)
         second = session.scalars(select(ResumeTemplate)).all()
 
         assert len(second) == 1
+
+
+def test_seed_resume_templates_sanitizes_legacy_private_master_template() -> None:
+    with make_session() as session:
+        session.add(
+            ResumeTemplate(
+                title="윤승규 - 풀스택 마스터 이력서",
+                summary="legacy",
+                markdown_content="이메일: tmdrb9926@gmail.com",
+            )
+        )
+        session.commit()
+
+        seed_resume_templates(session)
+        stored = session.scalars(select(ResumeTemplate)).all()
+
+        assert len(stored) == 1
+        assert stored[0].title == "샘플 - 풀스택 마스터 이력서"
+        assert stored[0].summary.startswith("직무 맞춤형으로 복사해 쓰는 범용 이력서 초안")
+        assert "tmdrb9926@gmail.com" not in stored[0].markdown_content
