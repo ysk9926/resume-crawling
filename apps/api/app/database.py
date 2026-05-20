@@ -5,7 +5,7 @@ from collections.abc import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from .config import DB_PATH, ensure_data_dir
+from .config import DATABASE_URL, IS_SQLITE, ensure_data_dir
 
 
 ensure_data_dir()
@@ -15,11 +15,14 @@ class Base(DeclarativeBase):
     pass
 
 
-DATABASE_URL = f"sqlite:///{DB_PATH}"
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
+engine_options: dict[str, object] = {
+    "pool_pre_ping": not IS_SQLITE,
+}
+
+if IS_SQLITE:
+    engine_options["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(DATABASE_URL, **engine_options)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 

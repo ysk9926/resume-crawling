@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import applications, auth, calendar, dashboard, postings, resumes, sources
 from app.bootstrap import ensure_sqlite_schema
-from app.config import API_TITLE
+from app.config import API_TITLE, IS_SQLITE
 from app.database import Base, SessionLocal, engine
 from app.seed import seed_resume_templates, seed_sources
 
@@ -15,10 +15,12 @@ from app.seed import seed_resume_templates, seed_sources
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
-    ensure_sqlite_schema()
+    if IS_SQLITE:
+        ensure_sqlite_schema()
     with SessionLocal() as session:
         seed_sources(session)
-        seed_resume_templates(session)
+        if IS_SQLITE:
+            seed_resume_templates(session)
     yield
 
 

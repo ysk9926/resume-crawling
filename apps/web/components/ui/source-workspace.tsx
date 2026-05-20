@@ -371,7 +371,7 @@ export function SourceWorkspace({ canSync, sources, selectedKey, recentRuns }: P
                       lineHeight: 1.7,
                     }}
                   >
-                    공고 동기화는 관리자 계정만 실행할 수 있습니다. 조회 전용으로 최근 이력만 확인할 수 있습니다.
+                    웹에서는 동기화를 실행하지 않습니다. 로컬에서 `pnpm dev` 또는 `pnpm api:sync:supabase`로 크롤러를 돌린 뒤, 여기서는 최근 이력만 확인합니다.
                   </div>
                 )}
               </div>
@@ -418,7 +418,7 @@ export function SourceWorkspace({ canSync, sources, selectedKey, recentRuns }: P
                     color: "var(--rw-muted)",
                   }}
                 >
-                  아직 동기화 이력이 없습니다. 위 버튼으로 첫 동기화를 실행해 보세요.
+                  아직 동기화 이력이 없습니다. 로컬 크롤러를 한 번 실행하면 이력이 여기에 표시됩니다.
                 </div>
               ) : (
                 <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>

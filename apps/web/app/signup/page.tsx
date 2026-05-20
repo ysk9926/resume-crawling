@@ -1,7 +1,9 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { signupAction } from "@/app/actions";
+import { getViewer } from "@/lib/api";
 
 type PageProps = {
   searchParams?: Promise<{ error?: string }>;
@@ -37,6 +39,11 @@ const inputStyle: CSSProperties = {
 };
 
 export default async function SignupPage({ searchParams }: PageProps) {
+  const viewer = await getViewer().catch(() => null);
+  if (viewer) {
+    redirect("/calendar");
+  }
+
   const params = (await searchParams) ?? {};
   const error = params.error ?? "";
 
@@ -57,11 +64,22 @@ export default async function SignupPage({ searchParams }: PageProps) {
           </div>
           <h1 style={{ margin: "10px 0 6px", fontSize: 28, lineHeight: 1.1 }}>회원가입</h1>
           <p style={{ margin: 0, fontSize: 13, color: "var(--rw-muted)", lineHeight: 1.6 }}>
-            아이디는 3~32자 영문, 숫자, 점, 대시, 언더스코어를 사용할 수 있습니다.
+            이메일과 표시용 아이디를 함께 등록합니다. 아이디는 3~32자 영문, 숫자, 점, 대시, 언더스코어를 사용할 수 있습니다.
           </p>
         </div>
 
         <form action={signupAction} style={{ padding: 28, display: "grid", gap: 16 }}>
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 700 }}>이메일</span>
+            <input
+              name="email"
+              placeholder="you@example.com"
+              required
+              style={inputStyle}
+              type="email"
+            />
+          </label>
+
           <label style={{ display: "grid", gap: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 700 }}>아이디</span>
             <input name="username" placeholder="ysk9926" required style={inputStyle} />

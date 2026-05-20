@@ -2,14 +2,19 @@ node_modules
 .pnpm-store
 .DS_Store
 .env
+.env.*
 .venv
 __pycache__
 .pytest_cache
 *.pyc
 apps/api/.venv
 apps/web/.next
+apps/web/.env.*
+apps/api/.env.*
 data/*.db
 data/*.db-*
+!apps/web/.env*.example
+!apps/api/.env*.example
 
 # Playwright MCP / research scratch files
 .playwright-mcp/

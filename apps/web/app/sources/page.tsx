@@ -4,7 +4,7 @@ import { ApiUnavailable } from "@/components/ui/api-unavailable";
 import { PageHeader } from "@/components/ui/page-header";
 import { pageBodyStyle } from "@/components/ui/primitives";
 import { SourceWorkspace } from "@/components/ui/source-workspace";
-import { getSources, getSourceSyncRuns, getViewer } from "@/lib/api";
+import { getSources, getSourceSyncRuns } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import type { SourceSummary, SyncRun } from "@/lib/types";
 
@@ -16,12 +16,9 @@ export default async function SourcesPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const selectedKeyParam = typeof params.key === "string" ? params.key : "";
 
-  const [sources, viewer] = await Promise.all([
-    getSources().catch(() => null),
-    getViewer().catch(() => null),
-  ]);
+  const sources = await getSources().catch(() => null);
 
-  if (!sources || !viewer) {
+  if (!sources) {
     return <ApiUnavailable />;
   }
 
@@ -84,7 +81,7 @@ export default async function SourcesPage({ searchParams }: PageProps) {
       />
       <div style={{ ...pageBodyStyle, padding: 0 }}>
         <SourceWorkspace
-          canSync={viewer.role === "admin"}
+          canSync={false}
           sources={sources}
           selectedKey={selectedSource.key}
           recentRuns={recentRuns}

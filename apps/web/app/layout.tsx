@@ -25,7 +25,7 @@ export default async function RootLayout({
   const viewer = publicPath ? null : await getViewer().catch(() => null);
 
   if (!publicPath && viewer === null) {
-    redirect("/logout?next=/login");
+    redirect("/login");
   }
 
   return (

@@ -5,13 +5,17 @@
   "scripts": {
     "bootstrap": "pnpm install && pnpm bootstrap:api",
     "bootstrap:api": "uv sync --project apps/api",
+    "build": "pnpm --dir apps/web build",
     "dev": "concurrently --kill-others-on-fail -n web,api -c \"#0f766e,#1d4ed8\" \"pnpm dev:web\" \"pnpm dev:api\"",
     "dev:web": "pnpm --dir apps/web dev",
-    "dev:api": "uv run --directory apps/api uvicorn app.main:app --reload --host 127.0.0.1 --port 3335",
+    "dev:api": "uv run --env-file apps/api/.env.supabase --directory apps/api uvicorn app.main:app --reload --host 127.0.0.1 --port 3335",
+    "dev:api:local": "uv run --directory apps/api uvicorn app.main:app --reload --host 127.0.0.1 --port 3335",
+    "dev:api:supabase": "uv run --env-file apps/api/.env.supabase --directory apps/api uvicorn app.main:app --reload --host 127.0.0.1 --port 3335",
     "lint": "pnpm --dir apps/web lint",
     "typecheck": "pnpm --dir apps/web exec tsc --noEmit",
     "api:test": "uv run --directory apps/api pytest",
-    "api:sync": "uv run --directory apps/api python -m app.scripts.sync_source"
+    "api:sync": "uv run --directory apps/api python -m app.scripts.sync_source",
+    "api:sync:supabase": "uv run --env-file apps/api/.env.supabase --directory apps/api python -m app.scripts.sync_source"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

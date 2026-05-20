@@ -1,7 +1,9 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { loginAction } from "@/app/actions";
+import { getViewer } from "@/lib/api";
 
 type PageProps = {
   searchParams?: Promise<{ error?: string }>;
@@ -37,6 +39,11 @@ const inputStyle: CSSProperties = {
 };
 
 export default async function LoginPage({ searchParams }: PageProps) {
+  const viewer = await getViewer().catch(() => null);
+  if (viewer) {
+    redirect("/calendar");
+  }
+
   const params = (await searchParams) ?? {};
   const error = params.error ?? "";
 
@@ -57,14 +64,20 @@ export default async function LoginPage({ searchParams }: PageProps) {
           </div>
           <h1 style={{ margin: "10px 0 6px", fontSize: 28, lineHeight: 1.1 }}>로그인</h1>
           <p style={{ margin: 0, fontSize: 13, color: "var(--rw-muted)", lineHeight: 1.6 }}>
-            로컬 계정으로 로그인하면 개인 공고 상태, 이력서, 지원서를 분리해서 관리합니다.
+            Supabase 계정으로 로그인하면 개인 공고 상태, 이력서, 지원서를 분리해서 관리합니다.
           </p>
         </div>
 
         <form action={loginAction} style={{ padding: 28, display: "grid", gap: 16 }}>
           <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 700 }}>아이디</span>
-            <input name="username" placeholder="ysk9926" required style={inputStyle} />
+            <span style={{ fontSize: 12, fontWeight: 700 }}>이메일</span>
+            <input
+              name="email"
+              placeholder="you@example.com"
+              required
+              style={inputStyle}
+              type="email"
+            />
           </label>
 
           <label style={{ display: "grid", gap: 6 }}>

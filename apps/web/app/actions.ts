@@ -1,6 +1,5 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -21,7 +20,6 @@ import {
   loginWithCredentials,
   signupWithCredentials,
 } from "@/lib/api";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
 import type { RememberSearchFilters } from "@/lib/types";
 
 function parseRequiredNumber(value: FormDataEntryValue | null, fieldName: string) {
@@ -62,29 +60,17 @@ function updateTags(tags: string[]) {
   }
 }
 
-async function setSessionCookie(token: string) {
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-  });
-}
-
 function buildAuthRedirect(pathname: string, message: string) {
   const search = new URLSearchParams({ error: message });
   return `${pathname}?${search.toString()}`;
 }
 
 export async function loginAction(formData: FormData) {
-  const username = String(formData.get("username") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   try {
-    const session = await loginWithCredentials({ username, password });
-    await setSessionCookie(session.session_token);
+    await loginWithCredentials({ email, password });
   } catch (error) {
     const message = error instanceof Error && error.message ? error.message : "로그인에 실패했습니다.";
     redirect(buildAuthRedirect("/login", message));
@@ -94,6 +80,7 @@ export async function loginAction(formData: FormData) {
 }
 
 export async function signupAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim();
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
@@ -103,8 +90,7 @@ export async function signupAction(formData: FormData) {
   }
 
   try {
-    const session = await signupWithCredentials({ username, password });
-    await setSessionCookie(session.session_token);
+    await signupWithCredentials({ email, password, username });
   } catch (error) {
     const message = error instanceof Error && error.message ? error.message : "회원가입에 실패했습니다.";
     redirect(buildAuthRedirect("/signup", message));

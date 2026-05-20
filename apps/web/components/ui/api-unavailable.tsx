@@ -4,8 +4,8 @@ export function ApiUnavailable() {
   return (
     <>
       <PageHeader
-        title="API에 연결할 수 없습니다"
-        description="apps/api 서버가 실행되지 않았거나 초기 마이그레이션이 끝나지 않았을 수 있습니다."
+        title="데이터를 불러올 수 없습니다"
+        description="Supabase 연결 정보가 없거나, 로컬 크롤러가 아직 공용 스키마/데이터를 준비하지 않았을 수 있습니다."
       />
       <div
         style={{
@@ -14,8 +14,8 @@ export function ApiUnavailable() {
           color: "var(--rw-muted)",
           lineHeight: 1.7,
         }}
-      >
-        루트에서 다음 명령을 실행하면 API 서버를 다시 시작할 수 있습니다.
+        >
+        먼저 Supabase 환경변수를 확인하고, 스키마/기준 데이터를 만들기 위해 로컬 크롤러 런타임을 한 번 실행해 주세요.
         <pre
           style={{
             marginTop: 12,
@@ -27,8 +27,9 @@ export function ApiUnavailable() {
             color: "var(--rw-foreground)",
             fontFamily: "var(--font-mono)",
           }}
-        >{`uv sync --project apps/api
-pnpm dev`}</pre>
+        >{`pnpm dev
+# 또는
+pnpm dev:api:supabase`}</pre>
       </div>
     </>
   );
