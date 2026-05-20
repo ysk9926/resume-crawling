@@ -22,7 +22,6 @@ type SourceAdminCommand =
     }
   | {
       command: "filter-options";
-      page?: number;
       sourceKey: string;
     }
   | {
@@ -120,10 +119,9 @@ export async function runSourceAdminCommand<
   }
 }
 
-export async function runSourceAdminFilterOptions(input: { sourceKey: string; page?: number }) {
+export async function runSourceAdminFilterOptions(input: { sourceKey: string }) {
   return runSourceAdminCommand<SourceFilterOptions>({
     command: "filter-options",
     sourceKey: input.sourceKey,
-    page: input.page,
   });
 }
