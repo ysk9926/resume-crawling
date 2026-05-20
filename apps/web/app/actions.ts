@@ -72,6 +72,7 @@ export async function loginAction(formData: FormData) {
   try {
     await loginWithCredentials({ email, password });
   } catch (error) {
+    console.error("loginAction failed", error);
     const message = error instanceof Error && error.message ? error.message : "로그인에 실패했습니다.";
     redirect(buildAuthRedirect("/login", message));
   }
@@ -92,6 +93,7 @@ export async function signupAction(formData: FormData) {
   try {
     await signupWithCredentials({ email, password, username });
   } catch (error) {
+    console.error("signupAction failed", error);
     const message = error instanceof Error && error.message ? error.message : "회원가입에 실패했습니다.";
     redirect(buildAuthRedirect("/signup", message));
   }

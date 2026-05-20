@@ -381,11 +381,15 @@ export async function signupWithCredentials(payload: {
     },
   });
 
-  if (error || !data.user) {
-    throw new Error(error?.message || "Signup failed.");
+  if (error) {
+    throw new Error(error.message || "회원가입에 실패했습니다.");
   }
 
-  await createAppUserForAuthUser(data.user, username);
+  if (!data.user) {
+    throw new Error(
+      "이미 사용 중이거나 확인 대기 중인 이메일일 수 있습니다. 다른 이메일을 사용하거나 확인 메일을 먼저 확인해 주세요.",
+    );
+  }
 
   if (!data.session) {
     const signInResult = await supabase.auth.signInWithPassword({
@@ -393,13 +397,17 @@ export async function signupWithCredentials(payload: {
       password,
     });
     if (signInResult.error || !signInResult.data.user) {
-      throw new Error(signInResult.error?.message || "Signup succeeded but automatic login failed.");
+      const message = signInResult.error?.message?.trim();
+      if (!message || /email not confirmed/i.test(message)) {
+        throw new Error("가입 확인 메일을 확인한 뒤 로그인해 주세요.");
+      }
+      throw new Error(message);
     }
   }
 
   const viewer = await getViewer();
   if (!viewer) {
-    throw new Error("Could not load signed-in user.");
+    throw new Error("가입은 완료됐지만 로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.");
   }
   return viewer;
 }
