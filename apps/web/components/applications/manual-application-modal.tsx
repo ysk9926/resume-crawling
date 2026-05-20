@@ -191,7 +191,7 @@ export function ManualApplicationModal({
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
                   gap: 0,
                   overflowY: "auto",
                   minHeight: 0,
@@ -202,7 +202,10 @@ export function ManualApplicationModal({
                     padding: "16px 24px",
                     borderRight: "1px solid var(--rw-border)",
                     display: "grid",
-                    gap: 10,
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    columnGap: 16,
+                    rowGap: 10,
+                    alignContent: "start",
                   }}
                 >
                   <label style={formLabelStyle}>
@@ -215,6 +218,18 @@ export function ManualApplicationModal({
                     />
                   </label>
                   <label style={formLabelStyle}>
+                    상태
+                    <select name="status" defaultValue="planned" style={inputStyle}>
+                      <option value="planned">지원 예정</option>
+                      <option value="applied">지원 완료</option>
+                      <option value="document_passed">서류 통과</option>
+                      <option value="interview">면접 진행</option>
+                      <option value="offer">오퍼</option>
+                      <option value="rejected">불합격</option>
+                      <option value="withdrawn">철회</option>
+                    </select>
+                  </label>
+                  <label style={formLabelStyle}>
                     회사명
                     <input
                       name="companyName"
@@ -222,6 +237,10 @@ export function ManualApplicationModal({
                       required
                       style={inputStyle}
                     />
+                  </label>
+                  <label style={formLabelStyle}>
+                    지원일
+                    <input type="date" name="appliedAt" style={inputStyle} />
                   </label>
                   <label style={formLabelStyle}>
                     공고명
@@ -233,8 +252,16 @@ export function ManualApplicationModal({
                     />
                   </label>
                   <label style={formLabelStyle}>
+                    등록일
+                    <input type="date" name="postedAt" style={inputStyle} />
+                  </label>
+                  <label style={formLabelStyle}>
                     공고 원문 URL
                     <input name="detailUrl" placeholder="https://..." style={inputStyle} />
+                  </label>
+                  <label style={formLabelStyle}>
+                    접수 시작일
+                    <input type="date" name="applyStartDate" style={inputStyle} />
                   </label>
                   <label style={formLabelStyle}>
                     지원 URL
@@ -243,6 +270,10 @@ export function ManualApplicationModal({
                       placeholder="https://..."
                       style={inputStyle}
                     />
+                  </label>
+                  <label style={formLabelStyle}>
+                    접수 마감일
+                    <input type="date" name="applyEndDate" style={inputStyle} />
                   </label>
                   <label style={formLabelStyle}>
                     이력서 템플릿
@@ -259,6 +290,14 @@ export function ManualApplicationModal({
                     </select>
                   </label>
                   <label style={formLabelStyle}>
+                    접수기간 텍스트
+                    <input
+                      name="applyPeriodRaw"
+                      placeholder="예: ~06.05 / 상시채용"
+                      style={inputStyle}
+                    />
+                  </label>
+                  <label style={formLabelStyle}>
                     지원 방식
                     <select
                       name="applicationMethod"
@@ -268,52 +307,6 @@ export function ManualApplicationModal({
                       <option value="simple">간편지원</option>
                       <option value="cover_letter">자소서 작성</option>
                     </select>
-                  </label>
-                </div>
-
-                <div
-                  style={{
-                    padding: "16px 24px",
-                    borderRight: "1px solid var(--rw-border)",
-                    display: "grid",
-                    gap: 10,
-                  }}
-                >
-                  <label style={formLabelStyle}>
-                    상태
-                    <select name="status" defaultValue="planned" style={inputStyle}>
-                      <option value="planned">지원 예정</option>
-                      <option value="applied">지원 완료</option>
-                      <option value="document_passed">서류 통과</option>
-                      <option value="interview">면접 진행</option>
-                      <option value="offer">오퍼</option>
-                      <option value="rejected">불합격</option>
-                      <option value="withdrawn">철회</option>
-                    </select>
-                  </label>
-                  <label style={formLabelStyle}>
-                    지원일
-                    <input type="date" name="appliedAt" style={inputStyle} />
-                  </label>
-                  <label style={formLabelStyle}>
-                    등록일
-                    <input type="date" name="postedAt" style={inputStyle} />
-                  </label>
-                  <label style={formLabelStyle}>
-                    접수 시작일
-                    <input type="date" name="applyStartDate" style={inputStyle} />
-                  </label>
-                  <label style={formLabelStyle}>
-                    접수 마감일
-                    <input type="date" name="applyEndDate" style={inputStyle} />
-                  </label>
-                  <label style={formLabelStyle}>
-                    접수기간 텍스트
-                    <input
-                      name="applyPeriodRaw"
-                      placeholder="예: ~06.05 / 상시채용"
-                      style={inputStyle}
-                    />
                   </label>
                   <label style={formLabelStyle}>
                     공고 태그
@@ -338,6 +331,7 @@ export function ManualApplicationModal({
                     padding: "16px 24px",
                     display: "grid",
                     gap: 10,
+                    alignContent: "start",
                   }}
                 >
                   <label style={formLabelStyle}>
