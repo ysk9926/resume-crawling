@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.routes.postings import load_postings_overview, load_postings_page
 from app.database import Base
-from app.models import JobPosting, Source
+from app.models import JobPosting, Source, User, UserPostingState
 
 
 def make_session() -> Session:
@@ -15,7 +15,16 @@ def make_session() -> Session:
     return testing_session()
 
 
-def seed_postings(session: Session) -> None:
+def seed_user(session: Session) -> User:
+    user = User(username="tester", password_hash="hashed", role="member")
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def seed_postings(session: Session) -> User:
+    user = seed_user(session)
     kofia = Source(key="kofia", name="KOFIA", base_url="https://kofia.example.com")
     jobkorea = Source(key="jobkorea", name="JobKorea", base_url="https://jobkorea.example.com")
     session.add_all([kofia, jobkorea])
@@ -23,90 +32,103 @@ def seed_postings(session: Session) -> None:
     session.refresh(kofia)
     session.refresh(jobkorea)
 
+    postings = [
+        JobPosting(
+            source_id=kofia.id,
+            external_id="1",
+            company_name="알파증권",
+            title="플랫폼 백엔드 엔지니어",
+            detail_url="https://example.com/1",
+            external_apply_url=None,
+            posted_at=date(2026, 5, 18),
+            apply_period_raw=None,
+            apply_start_date=None,
+            apply_end_date=None,
+            raw_content="원문 1",
+            normalized_content="플랫폼 백엔드 운영",
+            tags=["Backend"],
+        ),
+        JobPosting(
+            source_id=kofia.id,
+            external_id="2",
+            company_name="베타자산운용",
+            title="플랫폼 데이터 엔지니어",
+            detail_url="https://example.com/2",
+            external_apply_url=None,
+            posted_at=date(2026, 5, 17),
+            apply_period_raw=None,
+            apply_start_date=None,
+            apply_end_date=None,
+            raw_content="원문 2",
+            normalized_content="플랫폼 데이터 자동화",
+            tags=["Data"],
+        ),
+        JobPosting(
+            source_id=kofia.id,
+            external_id="3",
+            company_name="감마캐피탈",
+            title="리서치 분석가",
+            detail_url="https://example.com/3",
+            external_apply_url=None,
+            posted_at=date(2026, 5, 16),
+            apply_period_raw=None,
+            apply_start_date=None,
+            apply_end_date=None,
+            raw_content="원문 3",
+            normalized_content="시장 리서치",
+            tags=["Research"],
+        ),
+        JobPosting(
+            source_id=jobkorea.id,
+            external_id="4",
+            company_name="델타테크",
+            title="백엔드 개발자",
+            detail_url="https://example.com/4",
+            external_apply_url=None,
+            posted_at=date(2026, 5, 15),
+            apply_period_raw=None,
+            apply_start_date=None,
+            apply_end_date=None,
+            raw_content="원문 4",
+            normalized_content="외부 소스 데이터",
+            tags=["Backend"],
+        ),
+    ]
+    session.add_all(postings)
+    session.commit()
+    for posting in postings:
+        session.refresh(posting)
+
     session.add_all(
         [
-            JobPosting(
-                source_id=kofia.id,
-                external_id="1",
-                company_name="알파증권",
-                title="플랫폼 백엔드 엔지니어",
-                detail_url="https://example.com/1",
-                external_apply_url=None,
-                posted_at=date(2026, 5, 18),
-                apply_period_raw=None,
-                apply_start_date=None,
-                apply_end_date=None,
-                raw_content="원문 1",
-                normalized_content="플랫폼 백엔드 운영",
-                tags=["Backend"],
-                curation_status="new",
-                is_bookmarked=False,
-                is_todo=False,
-            ),
-            JobPosting(
-                source_id=kofia.id,
-                external_id="2",
-                company_name="베타자산운용",
-                title="플랫폼 데이터 엔지니어",
-                detail_url="https://example.com/2",
-                external_apply_url=None,
-                posted_at=date(2026, 5, 17),
-                apply_period_raw=None,
-                apply_start_date=None,
-                apply_end_date=None,
-                raw_content="원문 2",
-                normalized_content="플랫폼 데이터 자동화",
-                tags=["Data"],
+            UserPostingState(
+                user_id=user.id,
+                job_posting_id=postings[1].id,
                 curation_status="interesting",
                 is_bookmarked=True,
                 is_todo=True,
             ),
-            JobPosting(
-                source_id=kofia.id,
-                external_id="3",
-                company_name="감마캐피탈",
-                title="리서치 분석가",
-                detail_url="https://example.com/3",
-                external_apply_url=None,
-                posted_at=date(2026, 5, 16),
-                apply_period_raw=None,
-                apply_start_date=None,
-                apply_end_date=None,
-                raw_content="원문 3",
-                normalized_content="시장 리서치",
-                tags=["Research"],
+            UserPostingState(
+                user_id=user.id,
+                job_posting_id=postings[2].id,
                 curation_status="ignored",
-                is_bookmarked=False,
-                is_todo=False,
             ),
-            JobPosting(
-                source_id=jobkorea.id,
-                external_id="4",
-                company_name="델타테크",
-                title="백엔드 개발자",
-                detail_url="https://example.com/4",
-                external_apply_url=None,
-                posted_at=date(2026, 5, 15),
-                apply_period_raw=None,
-                apply_start_date=None,
-                apply_end_date=None,
-                raw_content="원문 4",
-                normalized_content="외부 소스 데이터",
-                tags=["Backend"],
-                curation_status="new",
+            UserPostingState(
+                user_id=user.id,
+                job_posting_id=postings[3].id,
                 is_bookmarked=True,
-                is_todo=False,
             ),
         ]
     )
     session.commit()
+    return user
 
 
 def test_load_postings_overview_counts_by_tab_with_source_filter() -> None:
     with make_session() as session:
-        seed_postings(session)
+        user = seed_postings(session)
 
-        overview = load_postings_overview(session, q=None, source_key="kofia")
+        overview = load_postings_overview(session, user, q=None, source_key="kofia")
 
         assert overview.all == 3
         assert overview.new == 1
@@ -118,10 +140,11 @@ def test_load_postings_overview_counts_by_tab_with_source_filter() -> None:
 
 def test_load_postings_page_applies_tab_filters_and_pagination() -> None:
     with make_session() as session:
-        seed_postings(session)
+        user = seed_postings(session)
 
         page = load_postings_page(
             session,
+            user,
             tab="all",
             q="플랫폼",
             source_key="kofia",
@@ -138,6 +161,7 @@ def test_load_postings_page_applies_tab_filters_and_pagination() -> None:
 
         todo_page = load_postings_page(
             session,
+            user,
             tab="todo",
             q=None,
             source_key=None,

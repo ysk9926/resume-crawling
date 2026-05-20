@@ -20,6 +20,7 @@ from app.models import (
     utcnow,
 )
 from app.services.cache import invalidate_read_caches
+from app.services.user_scope import DEFAULT_CURATION_STATUS, get_or_create_posting_state
 from app.utils.text import build_source_key, derive_tags, normalize_label, normalize_whitespace
 
 
@@ -165,6 +166,7 @@ def run_source_sync_with_filters(
 
 def create_or_replace_application(
     session: Session,
+    user_id: int,
     job_posting_id: int,
     resume_template_id: int,
     application_method: str,
@@ -172,23 +174,30 @@ def create_or_replace_application(
     note: str,
     applied_at: date | None = None,
 ) -> Application:
-    posting = session.scalar(
-        select(JobPosting)
-        .options(joinedload(JobPosting.application))
-        .where(JobPosting.id == job_posting_id)
-    )
+    posting = session.get(JobPosting, job_posting_id)
     if posting is None:
         raise ValueError("Job posting not found.")
 
-    template = session.get(ResumeTemplate, resume_template_id)
+    template = session.scalar(
+        select(ResumeTemplate).where(
+            ResumeTemplate.id == resume_template_id,
+            ResumeTemplate.user_id == user_id,
+        )
+    )
     if template is None:
         raise ValueError("Resume template not found.")
 
     snapshot_title = f"{template.title} · {posting.company_name}"
-    application = posting.application
+    application = session.scalar(
+        select(Application).where(
+            Application.user_id == user_id,
+            Application.job_posting_id == posting.id,
+        )
+    )
 
     if application is None:
         application = Application(
+            user_id=user_id,
             job_posting_id=posting.id,
             resume_template_id=template.id,
             application_method=application_method,
@@ -307,10 +316,6 @@ def build_manual_posting(
     apply_period_raw: str | None,
     normalized_content: str,
     tags: list[str],
-    curation_status: str,
-    curation_note: str | None,
-    is_bookmarked: bool,
-    is_todo: bool,
 ) -> JobPosting:
     normalized_company_name = normalize_label(company_name)
     normalized_title = normalize_label(title)
@@ -330,7 +335,6 @@ def build_manual_posting(
         supports_sync=False,
     )
     content = normalize_whitespace(normalized_content)
-    bookmarked = is_bookmarked or is_todo
     posting = JobPosting(
         source_id=source.id,
         external_id=f"manual:{uuid4().hex}",
@@ -346,10 +350,10 @@ def build_manual_posting(
         raw_content=content,
         normalized_content=content,
         tags=normalize_manual_tags(normalized_title, content, tags),
-        curation_status=curation_status,
-        curation_note=normalize_whitespace(curation_note or "") or None,
-        is_bookmarked=bookmarked,
-        is_todo=is_todo,
+        curation_status=DEFAULT_CURATION_STATUS,
+        curation_note=None,
+        is_bookmarked=False,
+        is_todo=False,
         last_seen_at=utcnow(),
     )
     session.add(posting)
@@ -359,6 +363,7 @@ def build_manual_posting(
 
 def create_manual_posting(
     session: Session,
+    user_id: int,
     platform_name: str,
     company_name: str,
     title: str,
@@ -388,11 +393,12 @@ def create_manual_posting(
         apply_period_raw=apply_period_raw,
         normalized_content=normalized_content,
         tags=tags,
-        curation_status=curation_status,
-        curation_note=curation_note,
-        is_bookmarked=is_bookmarked,
-        is_todo=is_todo,
     )
+    state = get_or_create_posting_state(session, user_id=user_id, posting_id=posting.id)
+    state.curation_status = curation_status
+    state.curation_note = normalize_whitespace(curation_note or "") or None
+    state.is_bookmarked = is_bookmarked or is_todo
+    state.is_todo = is_todo
     session.commit()
     session.refresh(posting)
     invalidate_read_caches()
@@ -401,6 +407,7 @@ def create_manual_posting(
 
 def create_manual_application(
     session: Session,
+    user_id: int,
     platform_name: str,
     company_name: str,
     job_title: str,
@@ -422,7 +429,12 @@ def create_manual_application(
     note: str,
     applied_at: date | None = None,
 ) -> Application:
-    template = session.get(ResumeTemplate, resume_template_id)
+    template = session.scalar(
+        select(ResumeTemplate).where(
+            ResumeTemplate.id == resume_template_id,
+            ResumeTemplate.user_id == user_id,
+        )
+    )
     if template is None:
         raise ValueError("Resume template not found.")
 
@@ -439,12 +451,14 @@ def create_manual_application(
         apply_period_raw=apply_period_raw,
         normalized_content=normalized_content,
         tags=tags,
-        curation_status=curation_status,
-        curation_note=curation_note,
-        is_bookmarked=is_bookmarked,
-        is_todo=is_todo,
     )
+    state = get_or_create_posting_state(session, user_id=user_id, posting_id=posting.id)
+    state.curation_status = curation_status
+    state.curation_note = normalize_whitespace(curation_note or "") or None
+    state.is_bookmarked = is_bookmarked or is_todo
+    state.is_todo = is_todo
     application = Application(
+        user_id=user_id,
         job_posting_id=posting.id,
         resume_template_id=template.id,
         application_method=application_method,
@@ -467,7 +481,7 @@ def normalize_cover_letter_tag(tag: str) -> str:
     return " ".join(tag.strip().lower().split())
 
 
-def resolve_cover_letter_tags(session: Session, tags: list[str]) -> list[CoverLetterTag]:
+def resolve_cover_letter_tags(session: Session, user_id: int, tags: list[str]) -> list[CoverLetterTag]:
     resolved: list[CoverLetterTag] = []
     seen: set[str] = set()
 
@@ -477,9 +491,14 @@ def resolve_cover_letter_tags(session: Session, tags: list[str]) -> list[CoverLe
         if not normalized or normalized in seen:
             continue
 
-        tag = session.scalar(select(CoverLetterTag).where(CoverLetterTag.name == normalized))
+        tag = session.scalar(
+            select(CoverLetterTag).where(
+                CoverLetterTag.user_id == user_id,
+                CoverLetterTag.name == normalized,
+            )
+        )
         if tag is None:
-            tag = CoverLetterTag(name=normalized, label=label)
+            tag = CoverLetterTag(user_id=user_id, name=normalized, label=label)
             session.add(tag)
             session.flush()
         elif tag.label != label:
@@ -493,6 +512,7 @@ def resolve_cover_letter_tags(session: Session, tags: list[str]) -> list[CoverLe
 
 def create_cover_letter_item(
     session: Session,
+    user_id: int,
     application_id: int,
     question: str,
     answer_markdown: str,
@@ -501,7 +521,10 @@ def create_cover_letter_item(
     application = session.scalar(
         select(Application)
         .options(joinedload(Application.cover_letter_items))
-        .where(Application.id == application_id)
+        .where(
+            Application.id == application_id,
+            Application.user_id == user_id,
+        )
     )
     if application is None:
         raise ValueError("Application not found.")
@@ -517,7 +540,7 @@ def create_cover_letter_item(
         answer_markdown=answer_markdown,
         order_index=(next_index or -1) + 1,
     )
-    item.tags = resolve_cover_letter_tags(session, tags)
+    item.tags = resolve_cover_letter_tags(session, user_id=user_id, tags=tags)
     session.add(item)
     session.commit()
     session.refresh(item)
@@ -527,6 +550,7 @@ def create_cover_letter_item(
 
 def update_cover_letter_item(
     session: Session,
+    user_id: int,
     item_id: int,
     question: str,
     answer_markdown: str,
@@ -536,7 +560,11 @@ def update_cover_letter_item(
     item = session.scalar(
         select(CoverLetterItem)
         .options(joinedload(CoverLetterItem.application), joinedload(CoverLetterItem.tags))
-        .where(CoverLetterItem.id == item_id)
+        .join(CoverLetterItem.application)
+        .where(
+            CoverLetterItem.id == item_id,
+            Application.user_id == user_id,
+        )
     )
     if item is None:
         raise ValueError("Cover letter item not found.")
@@ -544,15 +572,22 @@ def update_cover_letter_item(
     item.question = question
     item.answer_markdown = answer_markdown
     item.order_index = order_index
-    item.tags = resolve_cover_letter_tags(session, tags)
+    item.tags = resolve_cover_letter_tags(session, user_id=user_id, tags=tags)
     session.commit()
     session.refresh(item)
     invalidate_read_caches()
     return item
 
 
-def delete_cover_letter_item(session: Session, item_id: int) -> None:
-    item = session.get(CoverLetterItem, item_id)
+def delete_cover_letter_item(session: Session, user_id: int, item_id: int) -> None:
+    item = session.scalar(
+        select(CoverLetterItem)
+        .join(CoverLetterItem.application)
+        .where(
+            CoverLetterItem.id == item_id,
+            Application.user_id == user_id,
+        )
+    )
     if item is None:
         raise ValueError("Cover letter item not found.")
 
@@ -563,6 +598,7 @@ def delete_cover_letter_item(session: Session, item_id: int) -> None:
 
 def update_application_snapshot(
     session: Session,
+    user_id: int,
     application_id: int,
     status: str,
     note: str,
@@ -571,12 +607,22 @@ def update_application_snapshot(
     resume_snapshot_title: str,
     resume_snapshot_markdown: str,
 ) -> Application:
-    application = session.get(Application, application_id)
+    application = session.scalar(
+        select(Application).where(
+            Application.id == application_id,
+            Application.user_id == user_id,
+        )
+    )
     if application is None:
         raise ValueError("Application not found.")
 
     if resume_template_id is not None:
-        template = session.get(ResumeTemplate, resume_template_id)
+        template = session.scalar(
+            select(ResumeTemplate).where(
+                ResumeTemplate.id == resume_template_id,
+                ResumeTemplate.user_id == user_id,
+            )
+        )
         if template is None:
             raise ValueError("Resume template not found.")
         application.resume_template_id = resume_template_id

@@ -12,7 +12,7 @@ from app.api.routes.calendar import (
     load_calendar_month,
 )
 from app.database import Base
-from app.models import Application, JobPosting, ResumeTemplate, Source
+from app.models import Application, JobPosting, ResumeTemplate, Source, User, UserPostingState
 from app.services.sync import create_or_replace_application
 
 
@@ -23,9 +23,19 @@ def make_session() -> Session:
     return testing_session()
 
 
-def seed_calendar_data(session: Session) -> None:
+def seed_user(session: Session) -> User:
+    user = User(username="tester", password_hash="hashed", role="member")
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def seed_calendar_data(session: Session) -> User:
+    user = seed_user(session)
     source = Source(key="jobkorea", name="JobKorea", base_url="https://example.com")
     resume = ResumeTemplate(
+        user_id=user.id,
         title="공통 이력서",
         summary="기본 템플릿",
         markdown_content="# 이력서",
@@ -89,8 +99,19 @@ def seed_calendar_data(session: Session) -> None:
     for posting in postings:
         session.refresh(posting)
 
+    session.add(
+        UserPostingState(
+            user_id=user.id,
+            job_posting_id=postings[0].id,
+            is_bookmarked=True,
+            is_todo=True,
+        )
+    )
+    session.commit()
+
     create_or_replace_application(
         session,
+        user_id=user.id,
         job_posting_id=postings[0].id,
         resume_template_id=resume.id,
         application_method="cover_letter",
@@ -99,6 +120,7 @@ def seed_calendar_data(session: Session) -> None:
     )
     applied = create_or_replace_application(
         session,
+        user_id=user.id,
         job_posting_id=postings[1].id,
         resume_template_id=resume.id,
         application_method="simple",
@@ -108,6 +130,7 @@ def seed_calendar_data(session: Session) -> None:
     )
 
     interview = Application(
+        user_id=user.id,
         job_posting_id=postings[2].id,
         resume_template_id=resume.id,
         application_method="simple",
@@ -122,13 +145,14 @@ def seed_calendar_data(session: Session) -> None:
     session.add(interview)
     session.commit()
     session.refresh(applied)
+    return user
 
 
 def test_load_calendar_month_returns_month_scoped_events() -> None:
     with make_session() as session:
-        seed_calendar_data(session)
+        user = seed_calendar_data(session)
 
-        month = load_calendar_month(session, "2026-05")
+        month = load_calendar_month(session, user, "2026-05")
 
         assert month.month == "2026-05"
         assert month.month_start == date(2026, 5, 1)
@@ -142,9 +166,9 @@ def test_load_calendar_month_returns_month_scoped_events() -> None:
 
 def test_load_calendar_month_combines_posting_layers_without_duplicate_events() -> None:
     with make_session() as session:
-        seed_calendar_data(session)
+        user = seed_calendar_data(session)
 
-        month = load_calendar_month(session, "2026-05")
+        month = load_calendar_month(session, user, "2026-05")
         alpha_events = [item for item in month.events if item.company_name == "알파"]
 
         assert len(alpha_events) == 2
@@ -164,9 +188,9 @@ def test_load_calendar_month_combines_posting_layers_without_duplicate_events() 
 
 def test_load_calendar_month_maps_applied_events_to_applied_date() -> None:
     with make_session() as session:
-        seed_calendar_data(session)
+        user = seed_calendar_data(session)
 
-        month = load_calendar_month(session, "2026-05")
+        month = load_calendar_month(session, user, "2026-05")
         applied_event = next(
             item
             for item in month.events

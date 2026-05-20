@@ -19,6 +19,27 @@ class SourceSummary(BaseModel):
     posting_count: int = 0
 
 
+class ViewerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    role: str
+    is_active: bool
+    last_login_at: datetime | None
+    created_at: datetime
+
+
+class AuthRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AuthSessionOut(BaseModel):
+    session_token: str
+    user: ViewerOut
+
+
 class SyncRequest(BaseModel):
     start_page: int = Field(default=1, ge=1, le=10000)
     end_page: int = Field(default=1, ge=1, le=10000)

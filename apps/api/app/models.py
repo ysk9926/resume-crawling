@@ -25,6 +25,45 @@ def utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(Text)
+    role: Mapped[str] = mapped_column(String(20), default="member", index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    sessions: Mapped[list["UserSession"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    posting_states: Mapped[list["UserPostingState"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    resume_templates: Mapped[list["ResumeTemplate"]] = relationship(back_populates="user")
+    applications: Mapped[list["Application"]] = relationship(back_populates="user")
+    cover_letter_tags: Mapped[list["CoverLetterTag"]] = relationship(back_populates="user")
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    __table_args__ = (Index("ix_user_sessions_expires_at", "expires_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    session_token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="sessions")
+
+
 class Source(Base):
     __tablename__ = "sources"
 
@@ -71,7 +110,7 @@ class JobPosting(Base):
     raw_content: Mapped[str] = mapped_column(Text)
     normalized_content: Mapped[str] = mapped_column(Text)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
-    curation_status: Mapped[str] = mapped_column(String(30), default="new", index=True)
+    curation_status: Mapped[str] = mapped_column(String(30), default="new")
     curation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_bookmarked: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_todo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
@@ -81,11 +120,37 @@ class JobPosting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     source: Mapped["Source"] = relationship(back_populates="job_postings")
-    application: Mapped["Application | None"] = relationship(
+    posting_states: Mapped[list["UserPostingState"]] = relationship(
         back_populates="job_posting",
-        uselist=False,
         cascade="all, delete-orphan",
     )
+    applications: Mapped[list["Application"]] = relationship(
+        back_populates="job_posting",
+        cascade="all, delete-orphan",
+    )
+
+
+class UserPostingState(Base):
+    __tablename__ = "user_posting_states"
+    __table_args__ = (
+        UniqueConstraint("user_id", "job_posting_id", name="uq_user_posting_state_user_posting"),
+        Index("ix_user_posting_states_curation_status", "curation_status"),
+        Index("ix_user_posting_states_bookmarked", "is_bookmarked"),
+        Index("ix_user_posting_states_todo", "is_todo"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    job_posting_id: Mapped[int] = mapped_column(ForeignKey("job_postings.id"), index=True)
+    curation_status: Mapped[str] = mapped_column(String(30), default="new")
+    curation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_bookmarked: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_todo: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="posting_states")
+    job_posting: Mapped["JobPosting"] = relationship(back_populates="posting_states")
 
 
 class ResumeTemplate(Base):
@@ -93,12 +158,14 @@ class ResumeTemplate(Base):
     __table_args__ = (Index("ix_resume_templates_updated_at", "updated_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(160))
     summary: Mapped[str] = mapped_column(Text, default="")
     markdown_content: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
+    user: Mapped["User | None"] = relationship(back_populates="resume_templates")
     applications: Mapped[list["Application"]] = relationship(back_populates="resume_template")
 
 
@@ -112,12 +179,18 @@ cover_letter_item_tags = Table(
 
 class CoverLetterTag(Base):
     __tablename__ = "cover_letter_tags"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_cover_letter_tags_user_name"),
+        Index("ix_cover_letter_tags_user_name", "user_id", "name"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))
     label: Mapped[str] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
+    user: Mapped["User | None"] = relationship(back_populates="cover_letter_tags")
     items: Mapped[list["CoverLetterItem"]] = relationship(
         secondary=cover_letter_item_tags,
         back_populates="tags",
@@ -129,10 +202,12 @@ class Application(Base):
     __table_args__ = (
         Index("ix_applications_updated_at", "updated_at"),
         Index("ix_applications_application_method", "application_method"),
+        UniqueConstraint("user_id", "job_posting_id", name="uq_applications_user_posting"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    job_posting_id: Mapped[int] = mapped_column(ForeignKey("job_postings.id"), unique=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    job_posting_id: Mapped[int] = mapped_column(ForeignKey("job_postings.id"), index=True)
     resume_template_id: Mapped[int | None] = mapped_column(ForeignKey("resume_templates.id"), nullable=True)
     application_method: Mapped[str] = mapped_column(String(30), default="simple")
     status: Mapped[str] = mapped_column(String(30), default="planned", index=True)
@@ -145,7 +220,8 @@ class Application(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
-    job_posting: Mapped["JobPosting"] = relationship(back_populates="application")
+    user: Mapped["User | None"] = relationship(back_populates="applications")
+    job_posting: Mapped["JobPosting"] = relationship(back_populates="applications")
     resume_template: Mapped["ResumeTemplate | None"] = relationship(back_populates="applications")
     cover_letter_items: Mapped[list["CoverLetterItem"]] = relationship(
         back_populates="application",

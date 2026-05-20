@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.routes.applications import load_cover_letter_library_page
 from app.database import Base
-from app.models import JobPosting, ResumeTemplate, Source
+from app.models import JobPosting, ResumeTemplate, Source, User
 from app.services.sync import create_cover_letter_item, create_or_replace_application
 
 
@@ -16,9 +16,19 @@ def make_session() -> Session:
     return testing_session()
 
 
-def seed_cover_letter_items(session: Session) -> None:
+def seed_user(session: Session) -> User:
+    user = User(username="tester", password_hash="hashed", role="member")
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def seed_cover_letter_items(session: Session) -> User:
+    user = seed_user(session)
     source = Source(key="jobkorea", name="JobKorea", base_url="https://example.com")
     resume = ResumeTemplate(
+        user_id=user.id,
         title="공통 이력서",
         summary="기본 템플릿",
         markdown_content="# 이력서",
@@ -67,6 +77,7 @@ def seed_cover_letter_items(session: Session) -> None:
 
     first = create_or_replace_application(
         session,
+        user_id=user.id,
         job_posting_id=postings[0].id,
         resume_template_id=resume.id,
         application_method="cover_letter",
@@ -75,6 +86,7 @@ def seed_cover_letter_items(session: Session) -> None:
     )
     second = create_or_replace_application(
         session,
+        user_id=user.id,
         job_posting_id=postings[1].id,
         resume_template_id=resume.id,
         application_method="cover_letter",
@@ -84,6 +96,7 @@ def seed_cover_letter_items(session: Session) -> None:
 
     create_cover_letter_item(
         session,
+        user_id=user.id,
         application_id=first.id,
         question="첫 질문",
         answer_markdown="첫 답변",
@@ -91,18 +104,26 @@ def seed_cover_letter_items(session: Session) -> None:
     )
     create_cover_letter_item(
         session,
+        user_id=user.id,
         application_id=second.id,
         question="둘째 질문",
         answer_markdown="둘째 답변",
         tags=["data"],
     )
+    return user
 
 
 def test_cover_letter_library_lists_all_items_without_tag() -> None:
     with make_session() as session:
-        seed_cover_letter_items(session)
+        user = seed_cover_letter_items(session)
 
-        page = load_cover_letter_library_page(session, normalized_tag=None, page=1, page_size=1)
+        page = load_cover_letter_library_page(
+            session,
+            user.id,
+            normalized_tag=None,
+            page=1,
+            page_size=1,
+        )
 
         assert page.total_count == 2
         assert page.total_pages == 2
@@ -112,9 +133,15 @@ def test_cover_letter_library_lists_all_items_without_tag() -> None:
 
 def test_cover_letter_library_filters_by_exact_normalized_tag() -> None:
     with make_session() as session:
-        seed_cover_letter_items(session)
+        user = seed_cover_letter_items(session)
 
-        page = load_cover_letter_library_page(session, normalized_tag="backend", page=1, page_size=10)
+        page = load_cover_letter_library_page(
+            session,
+            user.id,
+            normalized_tag="backend",
+            page=1,
+            page_size=10,
+        )
 
         assert page.total_count == 1
         assert [item.question for item in page.items] == ["첫 질문"]

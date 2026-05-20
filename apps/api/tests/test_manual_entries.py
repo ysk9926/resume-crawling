@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base
-from app.models import Application, JobPosting, ResumeTemplate, Source
+from app.models import Application, JobPosting, ResumeTemplate, Source, User, UserPostingState
 from app.services.sync import (
     create_manual_application,
     create_manual_posting,
@@ -20,8 +20,17 @@ def make_session() -> Session:
     return testing_session()
 
 
-def seed_resume(session: Session) -> ResumeTemplate:
+def seed_user(session: Session) -> User:
+    user = User(username="tester", password_hash="hashed", role="member")
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def seed_resume(session: Session, user_id: int) -> ResumeTemplate:
     resume = ResumeTemplate(
+        user_id=user_id,
         title="공통 이력서",
         summary="기본 템플릿",
         markdown_content="# 이력서",
@@ -34,8 +43,10 @@ def seed_resume(session: Session) -> ResumeTemplate:
 
 def test_create_manual_posting_registers_source_once_and_marks_manual_origin() -> None:
     with make_session() as session:
+        user = seed_user(session)
         first = create_manual_posting(
             session,
+            user_id=user.id,
             platform_name="리멤버",
             company_name="알파",
             title="백엔드 엔지니어",
@@ -54,6 +65,7 @@ def test_create_manual_posting_registers_source_once_and_marks_manual_origin() -
         )
         second = create_manual_posting(
             session,
+            user_id=user.id,
             platform_name="리멤버",
             company_name="베타",
             title="데이터 엔지니어",
@@ -79,17 +91,29 @@ def test_create_manual_posting_registers_source_once_and_marks_manual_origin() -
         assert sources[0].base_url == "https://remember.co.kr"
         assert first.source_id == second.source_id
         assert first.ingest_kind == "manual"
-        assert first.is_bookmarked is True
-        assert first.is_todo is True
+        assert first.is_bookmarked is False
+        assert first.is_todo is False
         assert "Backend" in first.tags
+        state = session.scalar(
+            select(UserPostingState).where(
+                UserPostingState.user_id == user.id,
+                UserPostingState.job_posting_id == first.id,
+            )
+        )
+        assert state is not None
+        assert state.is_bookmarked is True
+        assert state.is_todo is True
+        assert state.curation_status == "interesting"
 
 
 def test_create_manual_application_creates_manual_posting_and_snapshot() -> None:
     with make_session() as session:
-        resume = seed_resume(session)
+        user = seed_user(session)
+        resume = seed_resume(session, user.id)
 
         application = create_manual_application(
             session,
+            user_id=user.id,
             platform_name="원티드",
             company_name="감마",
             job_title="플랫폼 백엔드 개발자",
@@ -125,12 +149,15 @@ def test_create_manual_application_creates_manual_posting_and_snapshot() -> None
         assert stored_application.apply_period_raw_snapshot == "~05.31"
         assert stored_application.applied_at == date(2026, 5, 19)
         assert stored_application.resume_snapshot_title == "공통 이력서 · 감마"
+        assert stored_application.user_id == user.id
 
 
 def test_manual_source_cannot_run_sync() -> None:
     with make_session() as session:
+        user = seed_user(session)
         create_manual_posting(
             session,
+            user_id=user.id,
             platform_name="리멤버",
             company_name="알파",
             title="백엔드 엔지니어",

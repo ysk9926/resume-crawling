@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.crawlers.base import CrawlInfo, CrawledJobPosting
 from app.database import Base
-from app.models import CoverLetterItem, JobPosting, JobSyncRun, ResumeTemplate, Source
+from app.models import CoverLetterItem, JobPosting, JobSyncRun, ResumeTemplate, Source, User
 from app.services import sync as sync_service
 from app.services.sync import (
     create_cover_letter_item,
@@ -21,6 +21,14 @@ def make_session() -> Session:
     Base.metadata.create_all(engine)
     testing_session = sessionmaker(bind=engine, expire_on_commit=False)
     return testing_session()
+
+
+def seed_user(session: Session) -> User:
+    user = User(username="tester", password_hash="hashed", role="member")
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
 
 
 def test_upsert_postings_inserts_and_updates() -> None:
@@ -76,6 +84,7 @@ def test_upsert_postings_inserts_and_updates() -> None:
 
 def test_create_or_replace_application_uses_resume_snapshot() -> None:
     with make_session() as session:
+        user = seed_user(session)
         source = Source(key="kofia", name="KOFIA", base_url="https://example.com")
         posting = JobPosting(
             source=source,
@@ -93,6 +102,7 @@ def test_create_or_replace_application_uses_resume_snapshot() -> None:
             tags=["Data"],
         )
         resume = ResumeTemplate(
+            user_id=user.id,
             title="데이터용 이력서",
             summary="데이터 직무 템플릿",
             markdown_content="# 경력\n- 수집 파이프라인 구축",
@@ -104,6 +114,7 @@ def test_create_or_replace_application_uses_resume_snapshot() -> None:
 
         application = create_or_replace_application(
             session,
+            user_id=user.id,
             job_posting_id=posting.id,
             resume_template_id=resume.id,
             application_method="simple",
@@ -120,6 +131,7 @@ def test_create_or_replace_application_uses_resume_snapshot() -> None:
 
 def test_create_or_replace_application_snapshots_deadline_and_cover_letter_items() -> None:
     with make_session() as session:
+        user = seed_user(session)
         source = Source(key="jobkorea", name="JobKorea", base_url="https://example.com")
         posting = JobPosting(
             source=source,
@@ -137,6 +149,7 @@ def test_create_or_replace_application_snapshots_deadline_and_cover_letter_items
             tags=["Backend"],
         )
         resume = ResumeTemplate(
+            user_id=user.id,
             title="백엔드 이력서",
             summary="백엔드 템플릿",
             markdown_content="# 경력\n- 서비스 운영",
@@ -148,6 +161,7 @@ def test_create_or_replace_application_snapshots_deadline_and_cover_letter_items
 
         application = create_or_replace_application(
             session,
+            user_id=user.id,
             job_posting_id=posting.id,
             resume_template_id=resume.id,
             application_method="cover_letter",
@@ -161,6 +175,7 @@ def test_create_or_replace_application_snapshots_deadline_and_cover_letter_items
 
         item = create_cover_letter_item(
             session,
+            user_id=user.id,
             application_id=application.id,
             question="지원 동기를 작성해주세요.",
             answer_markdown="서비스 운영 경험을 기반으로 기여하겠습니다.",
@@ -172,6 +187,7 @@ def test_create_or_replace_application_snapshots_deadline_and_cover_letter_items
 
         updated = update_cover_letter_item(
             session,
+            user_id=user.id,
             item_id=item.id,
             question="지원 동기와 관련 경험을 작성해주세요.",
             answer_markdown="운영 경험과 협업 경험을 정리했습니다.",

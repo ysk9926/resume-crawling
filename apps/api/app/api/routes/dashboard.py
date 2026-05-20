@@ -6,37 +6,60 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.config import DASHBOARD_CACHE_TTL_SECONDS
-from app.models import Application, JobPosting, JobSyncRun, ResumeTemplate, Source
+from app.models import (
+    Application,
+    JobPosting,
+    JobSyncRun,
+    ResumeTemplate,
+    Source,
+    User,
+    UserPostingState,
+)
 from app.schemas import ApplicationOut, DashboardOut, JobPostingOut, JobSyncRunOut, SourceSummary
+from app.security import get_current_user
 from app.services.cache import get_read_cache_value
 from .applications import serialize_application
-from .postings import serialize_posting
+from .postings import load_application_map, serialize_posting
 
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("", response_model=DashboardOut)
-def get_dashboard(db: Session = Depends(get_db)) -> DashboardOut:
+def get_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DashboardOut:
     return get_read_cache_value(
-        "dashboard:summary",
+        f"dashboard:summary:{current_user.id}",
         DASHBOARD_CACHE_TTL_SECONDS,
-        lambda: load_dashboard(db),
+        lambda: load_dashboard(db, current_user),
     )
 
 
-def load_dashboard(db: Session) -> DashboardOut:
+def load_dashboard(db: Session, current_user: User) -> DashboardOut:
     total_postings = db.scalar(select(func.count(JobPosting.id))) or 0
     todo_postings = db.scalar(
-        select(func.count(JobPosting.id)).where(JobPosting.is_todo.is_(True))
+        select(func.count(UserPostingState.id)).where(
+            UserPostingState.user_id == current_user.id,
+            UserPostingState.is_todo.is_(True),
+        )
     ) or 0
     interesting_postings = db.scalar(
-        select(func.count(JobPosting.id)).where(JobPosting.curation_status == "interesting")
+        select(func.count(UserPostingState.id)).where(
+            UserPostingState.user_id == current_user.id,
+            UserPostingState.curation_status == "interesting",
+        )
     ) or 0
     active_applications = db.scalar(
-        select(func.count(Application.id)).where(Application.status.not_in(["rejected", "withdrawn"]))
+        select(func.count(Application.id)).where(
+            Application.user_id == current_user.id,
+            Application.status.not_in(["rejected", "withdrawn"]),
+        )
     ) or 0
-    resume_count = db.scalar(select(func.count(ResumeTemplate.id))) or 0
+    resume_count = db.scalar(
+        select(func.count(ResumeTemplate.id)).where(ResumeTemplate.user_id == current_user.id)
+    ) or 0
 
     postings_count_subquery = (
         select(JobPosting.source_id, func.count(JobPosting.id).label("posting_count"))
@@ -51,16 +74,28 @@ def load_dashboard(db: Session) -> DashboardOut:
 
     recent_postings = db.scalars(
         select(JobPosting)
-        .options(joinedload(JobPosting.source), joinedload(JobPosting.application))
+        .options(joinedload(JobPosting.source))
         .order_by(JobPosting.posted_at.desc(), JobPosting.created_at.desc())
         .limit(6)
     ).all()
+    posting_ids = [posting.id for posting in recent_postings]
+    state_map = {
+        state.job_posting_id: state
+        for state in db.scalars(
+            select(UserPostingState).where(
+                UserPostingState.user_id == current_user.id,
+                UserPostingState.job_posting_id.in_(posting_ids),
+            )
+        ).all()
+    }
+    application_map = load_application_map(db, current_user.id, posting_ids)
     recent_applications = db.scalars(
         select(Application)
         .options(
             joinedload(Application.job_posting).joinedload(JobPosting.source),
             joinedload(Application.resume_template),
         )
+        .where(Application.user_id == current_user.id)
         .order_by(Application.updated_at.desc())
         .limit(6)
     ).all()
@@ -87,7 +122,14 @@ def load_dashboard(db: Session) -> DashboardOut:
             )
             for source, posting_count in sources
         ],
-        recent_postings=[serialize_posting(posting) for posting in recent_postings],
+        recent_postings=[
+            serialize_posting(
+                posting,
+                state=state_map.get(posting.id),
+                application=application_map.get(posting.id),
+            )
+            for posting in recent_postings
+        ],
         recent_applications=[serialize_application(application) for application in recent_applications],
         recent_sync_runs=[JobSyncRunOut.model_validate(sync_run) for sync_run in recent_sync_runs],
     )

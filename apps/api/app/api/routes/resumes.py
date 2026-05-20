@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.config import LOOKUP_CACHE_TTL_SECONDS
 from app.database import get_db
-from app.models import ResumeTemplate
+from app.models import ResumeTemplate, User
 from app.schemas import ResumeTemplateCreate, ResumeTemplateOut, ResumeTemplateUpdate
+from app.security import get_current_user
 from app.services.cache import get_read_cache_value, invalidate_read_caches
 
 
@@ -15,17 +16,22 @@ router = APIRouter(prefix="/resumes", tags=["resumes"])
 
 
 @router.get("", response_model=list[ResumeTemplateOut])
-def list_resumes(db: Session = Depends(get_db)) -> list[ResumeTemplateOut]:
+def list_resumes(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ResumeTemplateOut]:
     return get_read_cache_value(
-        "resumes:list",
+        f"resumes:list:{current_user.id}",
         LOOKUP_CACHE_TTL_SECONDS,
-        lambda: load_resumes(db),
+        lambda: load_resumes(db, current_user.id),
     )
 
 
-def load_resumes(db: Session) -> list[ResumeTemplateOut]:
+def load_resumes(db: Session, user_id: int) -> list[ResumeTemplateOut]:
     resumes = db.scalars(
-        select(ResumeTemplate).order_by(desc(ResumeTemplate.updated_at))
+        select(ResumeTemplate)
+        .where(ResumeTemplate.user_id == user_id)
+        .order_by(desc(ResumeTemplate.updated_at))
     ).all()
     return [ResumeTemplateOut.model_validate(resume) for resume in resumes]
 
@@ -33,9 +39,11 @@ def load_resumes(db: Session) -> list[ResumeTemplateOut]:
 @router.post("", response_model=ResumeTemplateOut)
 def create_resume(
     payload: ResumeTemplateCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ResumeTemplateOut:
     resume = ResumeTemplate(
+        user_id=current_user.id,
         title=payload.title,
         summary=payload.summary,
         markdown_content=payload.markdown_content,
@@ -51,9 +59,15 @@ def create_resume(
 def update_resume(
     resume_id: int,
     payload: ResumeTemplateUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ResumeTemplateOut:
-    resume = db.get(ResumeTemplate, resume_id)
+    resume = db.scalar(
+        select(ResumeTemplate).where(
+            ResumeTemplate.id == resume_id,
+            ResumeTemplate.user_id == current_user.id,
+        )
+    )
     if resume is None:
         raise HTTPException(status_code=404, detail="Resume template not found.")
 

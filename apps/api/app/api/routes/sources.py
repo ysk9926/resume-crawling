@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import CRAWL_INFO_CACHE_TTL_SECONDS, LOOKUP_CACHE_TTL_SECONDS
 from app.crawlers.registry import get_crawler
 from app.database import get_db
-from app.models import JobPosting, JobSyncRun, Source
+from app.models import JobPosting, JobSyncRun, Source, User
 from app.schemas import (
     JobSyncRunOut,
     SourceCrawlInfoOut,
@@ -15,6 +15,7 @@ from app.schemas import (
     SourceSummary,
     SyncRequest,
 )
+from app.security import get_current_admin, get_current_user
 from app.services.cache import get_read_cache_value
 from app.services.sync import run_source_sync_with_filters
 
@@ -23,7 +24,10 @@ router = APIRouter(prefix="/sources", tags=["sources"])
 
 
 @router.get("", response_model=list[SourceSummary])
-def list_sources(db: Session = Depends(get_db)) -> list[SourceSummary]:
+def list_sources(
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[SourceSummary]:
     return get_read_cache_value(
         "sources:list",
         LOOKUP_CACHE_TTL_SECONDS,
@@ -35,6 +39,7 @@ def list_sources(db: Session = Depends(get_db)) -> list[SourceSummary]:
 def sync_source(
     source_key: str,
     payload: SyncRequest,
+    _: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> JobSyncRunOut:
     try:
@@ -58,6 +63,7 @@ def sync_source(
 def list_source_sync_runs(
     source_key: str,
     limit: int = 20,
+    _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[JobSyncRunOut]:
     source = db.scalar(select(Source).where(Source.key == source_key))
@@ -73,7 +79,10 @@ def list_source_sync_runs(
 
 
 @router.get("/{source_key}/crawl-info", response_model=SourceCrawlInfoOut)
-def get_source_crawl_info(source_key: str) -> SourceCrawlInfoOut:
+def get_source_crawl_info(
+    source_key: str,
+    _: User = Depends(get_current_user),
+) -> SourceCrawlInfoOut:
     return get_read_cache_value(
         f"source-crawl-info:{source_key}",
         CRAWL_INFO_CACHE_TTL_SECONDS,
@@ -85,6 +94,7 @@ def get_source_crawl_info(source_key: str) -> SourceCrawlInfoOut:
 def get_source_crawl_info_with_filters(
     source_key: str,
     payload: SourceCrawlInfoRequest,
+    _: User = Depends(get_current_user),
 ) -> SourceCrawlInfoOut:
     return load_source_crawl_info(
         source_key,

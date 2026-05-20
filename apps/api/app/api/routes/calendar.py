@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import LIST_CACHE_TTL_SECONDS
 from app.database import get_db
-from app.models import Application, JobPosting, Source
+from app.models import Application, JobPosting, Source, User, UserPostingState
 from app.schemas import CalendarEventOut, CalendarMonthOut
+from app.security import get_current_user
 from app.services.cache import get_read_cache_value, make_cache_key
 
 
@@ -44,6 +45,7 @@ def normalize_month(month: str) -> tuple[str, date, date]:
 @router.get("", response_model=CalendarMonthOut)
 def get_calendar_month(
     month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CalendarMonthOut:
     try:
@@ -51,16 +53,17 @@ def get_calendar_month(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    cache_key = make_cache_key("calendar:", month=normalized)
+    cache_key = make_cache_key("calendar:", user_id=current_user.id, month=normalized)
     return get_read_cache_value(
         cache_key,
         LIST_CACHE_TTL_SECONDS,
-        lambda: load_calendar_month(db, normalized, month_start, month_end),
+        lambda: load_calendar_month(db, current_user, normalized, month_start, month_end),
     )
 
 
 def load_calendar_month(
     db: Session,
+    current_user: User,
     month: str,
     month_start: date | None = None,
     month_end: date | None = None,
@@ -70,8 +73,8 @@ def load_calendar_month(
     month_end = month_end or resolved_end
 
     events = [
-        *load_posting_events(db, month_start, month_end),
-        *load_application_events(db, month_start, month_end),
+        *load_posting_events(db, current_user.id, month_start, month_end),
+        *load_application_events(db, current_user.id, month_start, month_end),
     ]
     events.sort(
         key=lambda item: (
@@ -91,12 +94,13 @@ def load_calendar_month(
 
 def load_posting_events(
     db: Session,
+    user_id: int,
     month_start: date,
     month_end: date,
 ) -> list[CalendarEventOut]:
     postings = db.scalars(
         select(JobPosting)
-        .options(joinedload(JobPosting.source), joinedload(JobPosting.application))
+        .options(joinedload(JobPosting.source))
         .join(JobPosting.source)
         .where(
             JobPosting.apply_end_date.is_not(None),
@@ -106,11 +110,22 @@ def load_posting_events(
         .order_by(JobPosting.apply_end_date, JobPosting.company_name, JobPosting.title)
     ).all()
 
-    return [serialize_posting_event(posting) for posting in postings]
+    posting_ids = [posting.id for posting in postings]
+    state_map = {
+        state.job_posting_id: state
+        for state in db.scalars(
+            select(UserPostingState).where(
+                UserPostingState.user_id == user_id,
+                UserPostingState.job_posting_id.in_(posting_ids),
+            )
+        ).all()
+    }
+    return [serialize_posting_event(posting, state_map.get(posting.id)) for posting in postings]
 
 
 def load_application_events(
     db: Session,
+    user_id: int,
     month_start: date,
     month_end: date,
 ) -> list[CalendarEventOut]:
@@ -118,6 +133,7 @@ def load_application_events(
         select(Application)
         .options(joinedload(Application.job_posting).joinedload(JobPosting.source))
         .where(
+            Application.user_id == user_id,
             or_(
                 and_(
                     Application.status == "planned",
@@ -149,16 +165,19 @@ def build_postings_href(source: Source, company_name: str, title: str) -> str:
     return f"/postings?{query}"
 
 
-def serialize_posting_event(posting: JobPosting) -> CalendarEventOut:
+def serialize_posting_event(
+    posting: JobPosting,
+    state: UserPostingState | None,
+) -> CalendarEventOut:
     if posting.apply_end_date is None:
         raise ValueError("Posting event requires apply_end_date.")
 
     layer_keys = [POSTING_DEADLINE_LAYER]
     badges: list[str] = []
-    if posting.is_bookmarked:
+    if state and state.is_bookmarked:
         layer_keys.append(POSTING_BOOKMARK_LAYER)
         badges.append("찜")
-    if posting.is_todo:
+    if state and state.is_todo:
         layer_keys.append(POSTING_TODO_LAYER)
         badges.append("작성 예정")
     if posting.ingest_kind == "manual":

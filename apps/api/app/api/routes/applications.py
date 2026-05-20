@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import LIST_CACHE_TTL_SECONDS
 from app.database import get_db
-from app.models import Application, CoverLetterItem, CoverLetterTag, JobPosting
+from app.models import Application, CoverLetterItem, CoverLetterTag, JobPosting, User
 from app.schemas import (
     ApplicationCreate,
     ApplicationOut,
@@ -19,6 +19,7 @@ from app.schemas import (
     ManualApplicationCreate,
     PaginatedCoverLetterItemOut,
 )
+from app.security import get_current_user
 from app.services.cache import get_read_cache_value, make_cache_key
 from app.services.sync import (
     create_cover_letter_item,
@@ -77,18 +78,25 @@ def serialize_cover_letter_item(item: CoverLetterItem) -> CoverLetterItemOut:
     )
 
 
-def load_application_model(db: Session, application_id: int) -> Application | None:
+def load_application_model(db: Session, user_id: int, application_id: int) -> Application | None:
     return db.scalar(
         select(Application)
         .options(
             joinedload(Application.job_posting).joinedload(JobPosting.source),
             joinedload(Application.resume_template),
         )
-        .where(Application.id == application_id)
+        .where(
+            Application.id == application_id,
+            Application.user_id == user_id,
+        )
     )
 
 
-def load_cover_letter_item_model(db: Session, item_id: int) -> CoverLetterItem | None:
+def load_cover_letter_item_model(
+    db: Session,
+    user_id: int,
+    item_id: int,
+) -> CoverLetterItem | None:
     return db.execute(
         select(CoverLetterItem)
         .options(
@@ -97,26 +105,34 @@ def load_cover_letter_item_model(db: Session, item_id: int) -> CoverLetterItem |
             .joinedload(Application.job_posting)
             .joinedload(JobPosting.source),
         )
-        .where(CoverLetterItem.id == item_id)
+        .join(CoverLetterItem.application)
+        .where(
+            CoverLetterItem.id == item_id,
+            Application.user_id == user_id,
+        )
     ).unique().scalar_one_or_none()
 
 
 @router.get("", response_model=list[ApplicationOut])
-def list_applications(db: Session = Depends(get_db)) -> list[ApplicationOut]:
+def list_applications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ApplicationOut]:
     return get_read_cache_value(
-        "applications:list",
+        f"applications:list:{current_user.id}",
         LIST_CACHE_TTL_SECONDS,
-        lambda: load_applications(db),
+        lambda: load_applications(db, current_user.id),
     )
 
 
-def load_applications(db: Session) -> list[ApplicationOut]:
+def load_applications(db: Session, user_id: int) -> list[ApplicationOut]:
     applications = db.scalars(
         select(Application)
         .options(
             joinedload(Application.job_posting).joinedload(JobPosting.source),
             joinedload(Application.resume_template),
         )
+        .where(Application.user_id == user_id)
         .order_by(desc(Application.updated_at))
     ).all()
     return [serialize_application(application) for application in applications]
@@ -127,11 +143,13 @@ def list_cover_letter_library(
     tag: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PaginatedCoverLetterItemOut:
     normalized_tag = normalize_cover_letter_tag(tag or "") or None
     cache_key = make_cache_key(
         "cover-letter:library:",
+        user_id=current_user.id,
         tag=normalized_tag,
         page=page,
         page_size=page_size,
@@ -139,35 +157,47 @@ def list_cover_letter_library(
     return get_read_cache_value(
         cache_key,
         LIST_CACHE_TTL_SECONDS,
-        lambda: load_cover_letter_library_page(db, normalized_tag, page, page_size),
+        lambda: load_cover_letter_library_page(db, current_user.id, normalized_tag, page, page_size),
     )
 
 
 def load_cover_letter_library_page(
     db: Session,
+    user_id: int,
     normalized_tag: str | None,
     page: int,
     page_size: int,
 ) -> PaginatedCoverLetterItemOut:
-    filters = []
+    statement = (
+        select(CoverLetterItem)
+        .join(CoverLetterItem.application)
+        .where(Application.user_id == user_id)
+    )
+    count_statement = (
+        select(func.count(CoverLetterItem.id))
+        .select_from(CoverLetterItem)
+        .join(CoverLetterItem.application)
+        .where(Application.user_id == user_id)
+    )
     if normalized_tag:
-        filters.append(CoverLetterItem.tags.any(CoverLetterTag.name == normalized_tag))
+        tag_filter = CoverLetterItem.tags.any(CoverLetterTag.name == normalized_tag)
+        statement = statement.where(tag_filter)
+        count_statement = count_statement.where(tag_filter)
 
-    total_count = db.scalar(select(func.count(CoverLetterItem.id)).where(*filters)) or 0
+    total_count = db.scalar(count_statement) or 0
     total_pages = max(1, ceil(total_count / page_size)) if total_count else 1
     resolved_page = min(page, total_pages)
     offset = (resolved_page - 1) * page_size
 
     items = (
         db.execute(
-            select(CoverLetterItem)
+            statement
             .options(
                 joinedload(CoverLetterItem.tags),
                 joinedload(CoverLetterItem.application)
                 .joinedload(Application.job_posting)
                 .joinedload(JobPosting.source),
             )
-            .where(*filters)
             .order_by(desc(CoverLetterItem.updated_at), desc(CoverLetterItem.id))
             .offset(offset)
             .limit(page_size)
@@ -192,11 +222,13 @@ def load_cover_letter_library_page(
 def patch_cover_letter_item(
     item_id: int,
     payload: CoverLetterItemUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CoverLetterItemOut:
     try:
         updated = update_cover_letter_item(
             db,
+            user_id=current_user.id,
             item_id=item_id,
             question=payload.question,
             answer_markdown=payload.answer_markdown,
@@ -206,7 +238,7 @@ def patch_cover_letter_item(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    item = load_cover_letter_item_model(db, updated.id)
+    item = load_cover_letter_item_model(db, current_user.id, updated.id)
     if item is None:
         raise HTTPException(status_code=500, detail="Cover letter item could not be reloaded.")
     return serialize_cover_letter_item(item)
@@ -215,10 +247,11 @@ def patch_cover_letter_item(
 @router.delete("/cover-letter-items/{item_id}", status_code=204)
 def remove_cover_letter_item(
     item_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
     try:
-        delete_cover_letter_item(db, item_id)
+        delete_cover_letter_item(db, current_user.id, item_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(status_code=204)
@@ -227,9 +260,10 @@ def remove_cover_letter_item(
 @router.get("/{application_id}/cover-letter-items", response_model=list[CoverLetterItemOut])
 def list_application_cover_letter_items(
     application_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[CoverLetterItemOut]:
-    application = load_application_model(db, application_id)
+    application = load_application_model(db, current_user.id, application_id)
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found.")
 
@@ -256,11 +290,13 @@ def list_application_cover_letter_items(
 def create_application_cover_letter_item(
     application_id: int,
     payload: CoverLetterItemCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CoverLetterItemOut:
     try:
         created = create_cover_letter_item(
             db,
+            user_id=current_user.id,
             application_id=application_id,
             question=payload.question,
             answer_markdown=payload.answer_markdown,
@@ -270,7 +306,7 @@ def create_application_cover_letter_item(
         status_code = 404 if "not found" in str(exc).lower() else 400
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
-    item = load_cover_letter_item_model(db, created.id)
+    item = load_cover_letter_item_model(db, current_user.id, created.id)
     if item is None:
         raise HTTPException(status_code=500, detail="Cover letter item could not be reloaded.")
     return serialize_cover_letter_item(item)
@@ -279,11 +315,13 @@ def create_application_cover_letter_item(
 @router.post("", response_model=ApplicationOut)
 def create_application(
     payload: ApplicationCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApplicationOut:
     try:
         application = create_or_replace_application(
             db,
+            user_id=current_user.id,
             job_posting_id=payload.job_posting_id,
             resume_template_id=payload.resume_template_id,
             application_method=payload.application_method,
@@ -294,7 +332,7 @@ def create_application(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    application = load_application_model(db, application.id)
+    application = load_application_model(db, current_user.id, application.id)
     if application is None:
         raise HTTPException(status_code=500, detail="Application could not be reloaded.")
     return serialize_application(application)
@@ -303,11 +341,13 @@ def create_application(
 @router.post("/manual", response_model=ApplicationOut)
 def create_manual_application_entry(
     payload: ManualApplicationCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApplicationOut:
     try:
         application = create_manual_application(
             db,
+            user_id=current_user.id,
             platform_name=payload.platform_name,
             company_name=payload.company_name,
             job_title=payload.job_title,
@@ -332,7 +372,7 @@ def create_manual_application_entry(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    application = load_application_model(db, application.id)
+    application = load_application_model(db, current_user.id, application.id)
     if application is None:
         raise HTTPException(status_code=500, detail="Application could not be reloaded.")
     return serialize_application(application)
@@ -341,9 +381,10 @@ def create_manual_application_entry(
 @router.get("/{application_id}", response_model=ApplicationOut)
 def get_application(
     application_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApplicationOut:
-    application = load_application_model(db, application_id)
+    application = load_application_model(db, current_user.id, application_id)
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found.")
     return serialize_application(application)
@@ -353,11 +394,13 @@ def get_application(
 def update_application(
     application_id: int,
     payload: ApplicationUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApplicationOut:
     try:
         updated = update_application_snapshot(
             db,
+            user_id=current_user.id,
             application_id=application_id,
             status=payload.status,
             note=payload.note,
@@ -369,7 +412,7 @@ def update_application(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    application = load_application_model(db, updated.id)
+    application = load_application_model(db, current_user.id, updated.id)
     if application is None:
         raise HTTPException(status_code=500, detail="Application could not be reloaded.")
     return serialize_application(application)
