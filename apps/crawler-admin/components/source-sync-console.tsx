@@ -77,12 +77,13 @@ export function SourceSyncConsole({ sourceKey, supportsSync }: SourceSyncConsole
   const [rememberState, setRememberState] = useState(defaultRememberFilterFormState);
   const [jobKoreaState, setJobKoreaState] = useState(defaultJobKoreaFilterFormState);
   const [filterOptions, setFilterOptions] = useState<SourceFilterOptions | null>(null);
-  const [isOptionsLoading, setIsOptionsLoading] = useState(false);
+  const [filterOptionsError, setFilterOptionsError] = useState<string | null>(null);
   const [crawlInfo, setCrawlInfo] = useState<SourceCrawlInfo | null>(null);
   const [syncRun, setSyncRun] = useState<SyncRun | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isInfoPending, startInfoTransition] = useTransition();
   const [isSyncPending, startSyncTransition] = useTransition();
+  const isOptionsLoading = isJobKorea && filterOptions === null && filterOptionsError === null;
 
   const buildSourceFilters = (): SourceSearchFilters | undefined => {
     if (isRemember) {
@@ -117,31 +118,27 @@ export function SourceSyncConsole({ sourceKey, supportsSync }: SourceSyncConsole
 
   useEffect(() => {
     if (!supportsSync || !isJobKorea) {
-      setFilterOptions(null);
-      return;
+      return undefined;
     }
 
     let cancelled = false;
-    setIsOptionsLoading(true);
 
     void requestJson<SourceFilterOptions>("/api/sources/filter-options", { sourceKey })
       .then((result) => {
         if (cancelled) {
           return;
         }
+        setFilterOptionsError(null);
         setFilterOptions(result);
       })
       .catch((error) => {
         if (cancelled) {
           return;
         }
+        const errorMessage = getErrorMessage(error);
         setFilterOptions(null);
-        setMessage(getErrorMessage(error));
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsOptionsLoading(false);
-        }
+        setFilterOptionsError(errorMessage);
+        setMessage(errorMessage);
       });
 
     return () => {
