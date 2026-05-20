@@ -53,7 +53,7 @@ function translateAuthMessage(message: string | undefined, fallback: string) {
   }
 
   if (/user already registered/i.test(normalized)) {
-    return "이미 가입된 이메일입니다. 로그인하거나 메일 인증을 먼저 완료해 주세요.";
+    return "이미 가입된 이메일입니다. 로그인해 주세요.";
   }
 
   return normalized;
