@@ -6,7 +6,7 @@ import { signupAction } from "@/app/actions";
 import { getViewer } from "@/lib/api";
 
 type PageProps = {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; message?: string }>;
 };
 
 const pageStyle: CSSProperties = {
@@ -46,6 +46,7 @@ export default async function SignupPage({ searchParams }: PageProps) {
 
   const params = (await searchParams) ?? {};
   const error = params.error ?? "";
+  const message = params.message ?? "";
 
   return (
     <div style={pageStyle}>
@@ -95,6 +96,20 @@ export default async function SignupPage({ searchParams }: PageProps) {
             <input name="confirmPassword" required style={inputStyle} type="password" />
           </label>
 
+          <div
+            style={{
+              border: "1px solid #bfdbfe",
+              backgroundColor: "#eff6ff",
+              color: "#1d4ed8",
+              borderRadius: 6,
+              padding: "10px 12px",
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}
+          >
+            가입 후 인증 메일이 발송됩니다. 메일의 인증 링크를 연 뒤 로그인해 주세요.
+          </div>
+
           {error ? (
             <div
               style={{
@@ -108,6 +123,22 @@ export default async function SignupPage({ searchParams }: PageProps) {
               }}
             >
               {error}
+            </div>
+          ) : null}
+
+          {message ? (
+            <div
+              style={{
+                border: "1px solid #bfdbfe",
+                backgroundColor: "#eff6ff",
+                color: "#1d4ed8",
+                borderRadius: 6,
+                padding: "10px 12px",
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              {message}
             </div>
           ) : null}
 

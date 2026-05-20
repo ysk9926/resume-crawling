@@ -60,8 +60,20 @@ function updateTags(tags: string[]) {
   }
 }
 
-function buildAuthRedirect(pathname: string, message: string) {
-  const search = new URLSearchParams({ error: message });
+function buildAuthRedirect(
+  pathname: string,
+  params: {
+    error?: string;
+    message?: string;
+  },
+) {
+  const search = new URLSearchParams();
+  if (params.error) {
+    search.set("error", params.error);
+  }
+  if (params.message) {
+    search.set("message", params.message);
+  }
   return `${pathname}?${search.toString()}`;
 }
 
@@ -74,7 +86,7 @@ export async function loginAction(formData: FormData) {
   } catch (error) {
     console.error("loginAction failed", error);
     const message = error instanceof Error && error.message ? error.message : "로그인에 실패했습니다.";
-    redirect(buildAuthRedirect("/login", message));
+    redirect(buildAuthRedirect("/login", { error: message }));
   }
 
   redirect("/calendar");
@@ -87,15 +99,24 @@ export async function signupAction(formData: FormData) {
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
   if (password !== confirmPassword) {
-    redirect(buildAuthRedirect("/signup", "비밀번호 확인이 일치하지 않습니다."));
+    redirect(buildAuthRedirect("/signup", { error: "비밀번호 확인이 일치하지 않습니다." }));
   }
 
+  let signupResult: Awaited<ReturnType<typeof signupWithCredentials>>;
   try {
-    await signupWithCredentials({ email, password, username });
+    signupResult = await signupWithCredentials({ email, password, username });
   } catch (error) {
     console.error("signupAction failed", error);
     const message = error instanceof Error && error.message ? error.message : "회원가입에 실패했습니다.";
-    redirect(buildAuthRedirect("/signup", message));
+    redirect(buildAuthRedirect("/signup", { error: message }));
+  }
+
+  if (signupResult.requiresEmailConfirmation) {
+    redirect(
+      buildAuthRedirect("/login", {
+        message: "가입 확인 메일을 보냈습니다. 메일의 인증 링크를 연 뒤 로그인해 주세요.",
+      }),
+    );
   }
 
   redirect("/calendar");

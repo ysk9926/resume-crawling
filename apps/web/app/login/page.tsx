@@ -6,7 +6,7 @@ import { loginAction } from "@/app/actions";
 import { getViewer } from "@/lib/api";
 
 type PageProps = {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; message?: string }>;
 };
 
 const pageStyle: CSSProperties = {
@@ -46,6 +46,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
 
   const params = (await searchParams) ?? {};
   const error = params.error ?? "";
+  const message = params.message ?? "";
 
   return (
     <div style={pageStyle}>
@@ -101,6 +102,22 @@ export default async function LoginPage({ searchParams }: PageProps) {
             </div>
           ) : null}
 
+          {message ? (
+            <div
+              style={{
+                border: "1px solid #bfdbfe",
+                backgroundColor: "#eff6ff",
+                color: "#1d4ed8",
+                borderRadius: 6,
+                padding: "10px 12px",
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              {message}
+            </div>
+          ) : null}
+
           <button
             type="submit"
             style={{
@@ -128,6 +145,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
             color: "var(--rw-muted)",
           }}
         >
+          <span>회원가입 후에는 메일 인증을 완료해야 로그인할 수 있습니다.</span>
           <span>계정이 없다면 첫 가입자가 자동 관리자입니다.</span>
           <Link href="/signup" style={{ color: "var(--rw-accent)", fontWeight: 700 }}>
             회원가입 →

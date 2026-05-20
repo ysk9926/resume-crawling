@@ -8,6 +8,10 @@ function normalizeEnvValue(value: string | undefined) {
   return normalized ? normalized : null;
 }
 
+function stripTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
 export function getSupabaseBrowserConfig(): SupabaseBrowserConfig | null {
   const url = normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const publishableKey = normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
@@ -30,4 +34,21 @@ export function requireSupabaseBrowserConfig(): SupabaseBrowserConfig {
     );
   }
   return config;
+}
+
+export function getSiteUrl() {
+  const explicitUrl = normalizeEnvValue(process.env.NEXT_PUBLIC_SITE_URL);
+  if (explicitUrl) {
+    return stripTrailingSlash(explicitUrl);
+  }
+
+  const vercelUrl =
+    normalizeEnvValue(process.env.NEXT_PUBLIC_VERCEL_URL) ??
+    normalizeEnvValue(process.env.VERCEL_URL);
+  if (vercelUrl) {
+    const normalized = vercelUrl.startsWith("http") ? vercelUrl : `https://${vercelUrl}`;
+    return stripTrailingSlash(normalized);
+  }
+
+  return "http://127.0.0.1:3334";
 }

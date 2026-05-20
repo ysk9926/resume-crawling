@@ -6,6 +6,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import type { Viewer } from "@/lib/types";
 import { type DbExecutor, sql } from "@/lib/db";
 import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
+import { getSiteUrl } from "@/utils/supabase/env";
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{2,31}$/;
 
@@ -35,6 +36,27 @@ function normalizeUsername(value: string) {
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
+}
+
+function translateAuthMessage(message: string | undefined, fallback: string) {
+  const normalized = message?.trim();
+  if (!normalized) {
+    return fallback;
+  }
+
+  if (/email not confirmed/i.test(normalized)) {
+    return "이메일 인증을 완료한 뒤 로그인해 주세요.";
+  }
+
+  if (/invalid login credentials/i.test(normalized)) {
+    return "이메일 또는 비밀번호가 올바르지 않습니다.";
+  }
+
+  if (/user already registered/i.test(normalized)) {
+    return "이미 가입된 이메일입니다. 로그인하거나 메일 인증을 먼저 완료해 주세요.";
+  }
+
+  return normalized;
 }
 
 function validateUsername(value: string) {
@@ -328,18 +350,29 @@ export async function loginWithCredentials(payload: {
   });
 
   if (error || !data.user) {
-    throw new Error(error?.message || "Invalid email or password.");
+    throw new Error(
+      translateAuthMessage(error?.message, "이메일 또는 비밀번호가 올바르지 않습니다."),
+    );
   }
 
   const appUser = await ensureAppUserForAuthUser(data.user);
   return serializeViewer(appUser);
 }
 
+type SignupResult =
+  | {
+      requiresEmailConfirmation: true;
+    }
+  | {
+      requiresEmailConfirmation: false;
+      viewer: Viewer;
+    };
+
 export async function signupWithCredentials(payload: {
   email: string;
   password: string;
   username: string;
-}) {
+}): Promise<SignupResult> {
   await ensureAuthSchema();
 
   const email = normalizeEmail(payload.email);
@@ -378,11 +411,12 @@ export async function signupWithCredentials(payload: {
       data: {
         username,
       },
+      emailRedirectTo: getSiteUrl(),
     },
   });
 
   if (error) {
-    throw new Error(error.message || "회원가입에 실패했습니다.");
+    throw new Error(translateAuthMessage(error.message, "회원가입에 실패했습니다."));
   }
 
   if (!data.user) {
@@ -392,22 +426,14 @@ export async function signupWithCredentials(payload: {
   }
 
   if (!data.session) {
-    const signInResult = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (signInResult.error || !signInResult.data.user) {
-      const message = signInResult.error?.message?.trim();
-      if (!message || /email not confirmed/i.test(message)) {
-        throw new Error("가입 확인 메일을 확인한 뒤 로그인해 주세요.");
-      }
-      throw new Error(message);
-    }
+    return {
+      requiresEmailConfirmation: true,
+    };
   }
 
-  const viewer = await getViewer();
-  if (!viewer) {
-    throw new Error("가입은 완료됐지만 로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.");
-  }
-  return viewer;
+  const appUser = await ensureAppUserForAuthUser(data.user);
+  return {
+    requiresEmailConfirmation: false,
+    viewer: serializeViewer(appUser),
+  };
 }
