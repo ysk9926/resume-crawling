@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import { ApiUnavailable } from "@/components/ui/api-unavailable";
 import { PageHeader } from "@/components/ui/page-header";
 import { pageBodyStyle } from "@/components/ui/primitives";
@@ -45,16 +43,9 @@ export default async function SourcesPage({ searchParams }: PageProps) {
     );
   }
 
-  const validKey = sources.some((source) => source.key === selectedKeyParam)
-    ? selectedKeyParam
-    : "";
-
-  if (!validKey) {
-    const firstSync = sources.find((source) => source.supports_sync) ?? sources[0];
-    redirect(`/sources?key=${encodeURIComponent(firstSync.key)}`);
-  }
-
-  const selectedSource = sources.find((source) => source.key === validKey) as SourceSummary;
+  const fallbackSource = sources.find((source) => source.supports_sync) ?? sources[0];
+  const selectedSource =
+    sources.find((source) => source.key === selectedKeyParam) ?? fallbackSource;
   const recentRuns: SyncRun[] = selectedSource.supports_sync
     ? await getSourceSyncRuns(selectedSource.key, 12).catch(() => [])
     : [];

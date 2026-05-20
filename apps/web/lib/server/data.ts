@@ -1,6 +1,6 @@
 import "server-only";
 
-import { cache } from "react";
+import { unstable_cache } from "next/cache";
 
 import { type DbExecutor, sql } from "@/lib/db";
 import { requireViewer } from "@/lib/server/auth";
@@ -609,10 +609,31 @@ async function getSourceRows() {
   `;
 }
 
-const getCachedSources = cache(async () => {
-  const rows = await getSourceRows();
-  return rows.map(serializeSource);
-});
+const getCachedSources = unstable_cache(
+  async () => {
+    const rows = await getSourceRows();
+    return rows.map(serializeSource);
+  },
+  ["sources:list"],
+  { revalidate: 10 },
+);
+
+const getCachedSourceSyncRuns = unstable_cache(
+  async (sourceKey: string, limit: number) => {
+    const rows = await sql<Record<string, unknown>[]>`
+      select r.id, r.source_id, r.status, r.message, r.inserted_count, r.updated_count, r.total_count,
+        r.started_at, r.finished_at
+      from job_sync_runs r
+      join sources s on s.id = r.source_id
+      where s.key = ${sourceKey}
+      order by r.started_at desc
+      limit ${Math.max(1, Math.min(limit, 100))}
+    `;
+    return rows.map(serializeSyncRun);
+  },
+  ["sources:sync-runs"],
+  { revalidate: 10 },
+);
 
 async function findOrCreateSource(
   tx: DbExecutor,
@@ -951,16 +972,7 @@ export async function getSources() {
 
 export async function getSourceSyncRuns(sourceKey: string, limit: number = 20) {
   await requireViewer();
-  const rows = await sql<Record<string, unknown>[]>`
-    select r.id, r.source_id, r.status, r.message, r.inserted_count, r.updated_count, r.total_count,
-      r.started_at, r.finished_at
-    from job_sync_runs r
-    join sources s on s.id = r.source_id
-    where s.key = ${sourceKey}
-    order by r.started_at desc
-    limit ${Math.max(1, Math.min(limit, 100))}
-  `;
-  return rows.map(serializeSyncRun);
+  return getCachedSourceSyncRuns(sourceKey, limit);
 }
 
 export async function getPostingOverview(filters?: { q?: string; source_key?: string }) {
