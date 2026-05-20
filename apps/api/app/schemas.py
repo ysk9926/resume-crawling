@@ -40,18 +40,6 @@ class AuthSessionOut(BaseModel):
     user: ViewerOut
 
 
-class SyncRequest(BaseModel):
-    start_page: int = Field(default=1, ge=1, le=10000)
-    end_page: int = Field(default=1, ge=1, le=10000)
-    filters: "RememberSearchFilters | None" = None
-
-    @model_validator(mode="after")
-    def validate_page_range(self) -> "SyncRequest":
-        if self.end_page < self.start_page:
-            raise ValueError("종료 페이지는 시작 페이지보다 크거나 같아야 합니다.")
-        return self
-
-
 class RememberAddressFilter(BaseModel):
     level1: str = Field(min_length=1, max_length=50)
     level2: str | None = Field(default=None, max_length=50)
@@ -87,9 +75,81 @@ class RememberSearchFilters(BaseModel):
         return self
 
 
+class JobKoreaSearchFilters(BaseModel):
+    duties: list[str] | None = None
+    duty_keywords: list[str] | None = None
+    locals: list[str] | None = None
+    career_codes: list[str] | None = None
+    career_start: int | None = Field(default=None, ge=0, le=99)
+    career_end: int | None = Field(default=None, ge=0, le=99)
+    education_codes: list[str] | None = None
+    company_type_codes: list[str] | None = None
+    job_type_codes: list[str] | None = None
+    industry_codes: list[str] | None = None
+    industry_keywords: list[str] | None = None
+    position_codes: list[str] | None = None
+    salary_codes: list[str] | None = None
+    salary_type: str | None = Field(default=None, max_length=20)
+    salary_input: int | None = Field(default=None, ge=0, le=1000000000)
+    major_codes: list[str] | None = None
+    license_codes: list[str] | None = None
+    preference_codes: list[str] | None = None
+    welfare_codes: list[str] | None = None
+    include_keywords: list[str] | None = None
+    exclude_keywords: list[str] | None = None
+    direct_apply_only: bool | None = None
+    exclude_confirmed_postings: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_career_range(self) -> "JobKoreaSearchFilters":
+        if (
+            self.career_start is not None
+            and self.career_end is not None
+            and self.career_end < self.career_start
+        ):
+            raise ValueError("경력 종료값은 시작값보다 크거나 같아야 합니다.")
+        return self
+
+
+SourceSearchFilters = RememberSearchFilters | JobKoreaSearchFilters
+
+
+class SyncRequest(BaseModel):
+    start_page: int = Field(default=1, ge=1, le=10000)
+    end_page: int = Field(default=1, ge=1, le=10000)
+    filters: SourceSearchFilters | None = None
+
+    @model_validator(mode="after")
+    def validate_page_range(self) -> "SyncRequest":
+        if self.end_page < self.start_page:
+            raise ValueError("종료 페이지는 시작 페이지보다 크거나 같아야 합니다.")
+        return self
+
+
 class SourceCrawlInfoRequest(BaseModel):
     page: int = Field(default=1, ge=1, le=10000)
-    filters: RememberSearchFilters | None = None
+    filters: SourceSearchFilters | None = None
+
+
+class JobKoreaFilterOption(BaseModel):
+    code: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    children: list["JobKoreaFilterOption"] | None = None
+
+
+class JobKoreaFilterOptionsOut(BaseModel):
+    duties: list[JobKoreaFilterOption] = Field(default_factory=list)
+    locals: list[JobKoreaFilterOption] = Field(default_factory=list)
+    educations: list[JobKoreaFilterOption] = Field(default_factory=list)
+    company_types: list[JobKoreaFilterOption] = Field(default_factory=list)
+    job_types: list[JobKoreaFilterOption] = Field(default_factory=list)
+    industries: list[JobKoreaFilterOption] = Field(default_factory=list)
+    positions: list[JobKoreaFilterOption] = Field(default_factory=list)
+    salary_types: list[JobKoreaFilterOption] = Field(default_factory=list)
+    majors: list[JobKoreaFilterOption] = Field(default_factory=list)
+    licenses: list[JobKoreaFilterOption] = Field(default_factory=list)
+    preferences: list[JobKoreaFilterOption] = Field(default_factory=list)
+    welfare: list[JobKoreaFilterOption] = Field(default_factory=list)
 
 
 class SourceCrawlInfoOut(BaseModel):
