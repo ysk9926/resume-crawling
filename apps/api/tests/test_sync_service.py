@@ -232,7 +232,27 @@ def test_run_source_sync_rejects_range_outside_total_pages(monkeypatch: pytest.M
         assert crawler.closed is True
 
 
-def test_run_source_sync_with_filters_passes_filters_to_crawler(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("source_key", "filters"),
+    [
+        ("remember", {"keywords": ["백엔드"], "leader_position": True}),
+        (
+            "jobkorea",
+            {
+                "duties": ["10031"],
+                "locals": ["I000"],
+                "career_start": 3,
+                "career_end": 7,
+                "direct_apply_only": True,
+            },
+        ),
+    ],
+)
+def test_run_source_sync_with_filters_passes_filters_to_crawler(
+    monkeypatch: pytest.MonkeyPatch,
+    source_key: str,
+    filters: dict[str, object],
+) -> None:
     class StubCrawler:
         def __init__(self) -> None:
             self.closed = False
@@ -255,7 +275,7 @@ def test_run_source_sync_with_filters_passes_filters_to_crawler(monkeypatch: pyt
         return crawler
 
     with make_session() as session:
-        source = Source(key="remember", name="Remember", base_url="https://example.com")
+        source = Source(key=source_key, name=source_key.title(), base_url="https://example.com")
         session.add(source)
         session.commit()
 
@@ -263,15 +283,15 @@ def test_run_source_sync_with_filters_passes_filters_to_crawler(monkeypatch: pyt
 
         sync_run = sync_service.run_source_sync_with_filters(
             session,
-            source_key="remember",
+            source_key=source_key,
             start_page=1,
             end_page=1,
-            filters={"keywords": ["백엔드"], "leader_position": True},
+            filters=filters,
         )
 
         assert sync_run.status == "success"
         assert captured == {
-            "source_key": "remember",
-            "filters": {"keywords": ["백엔드"], "leader_position": True},
+            "source_key": source_key,
+            "filters": filters,
         }
         assert crawler.closed is True
