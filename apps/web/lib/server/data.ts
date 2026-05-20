@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { type DbExecutor, sql } from "@/lib/db";
 import { requireViewer } from "@/lib/server/auth";
 import type {
@@ -157,6 +159,11 @@ function resolvePostingFlags(
 function parseDateInput(value: string | null | undefined) {
   const candidate = String(value ?? "").trim();
   return candidate || null;
+}
+
+function endOfMonth(month: string) {
+  const [year, monthLabel] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, monthLabel, 0)).toISOString().slice(0, 10);
 }
 
 function serializeSource(row: Record<string, unknown>): SourceSummary {
@@ -466,6 +473,146 @@ async function getApplicationRows(viewerId: number) {
     order by a.updated_at desc, a.id desc
   `;
 }
+
+async function getApplicationRowsForStatuses(viewerId: number, statuses?: string[]) {
+  const statusCondition =
+    statuses && statuses.length > 0
+      ? sql`and a.status = any(${sql.array(statuses)})`
+      : sql``;
+
+  return sql<Record<string, unknown>[]>`
+    select
+      a.id,
+      a.job_posting_id,
+      jp.title as job_title,
+      jp.company_name,
+      s.key as source_key,
+      s.name as source_name,
+      jp.detail_url,
+      jp.external_apply_url,
+      a.resume_template_id,
+      rt.title as resume_template_title,
+      a.application_method,
+      a.status,
+      a.note,
+      a.applied_at,
+      a.apply_end_date_snapshot,
+      a.apply_period_raw_snapshot,
+      a.resume_snapshot_title,
+      a.resume_snapshot_markdown,
+      coalesce(jp.normalized_content, '') as posting_normalized_content,
+      coalesce(jp.tags, '[]'::json) as posting_tags,
+      a.created_at,
+      a.updated_at
+    from applications a
+    join job_postings jp on jp.id = a.job_posting_id
+    join sources s on s.id = jp.source_id
+    left join resume_templates rt on rt.id = a.resume_template_id
+    where a.user_id = ${viewerId}
+      ${statusCondition}
+    order by
+      case when a.apply_end_date_snapshot is null then 1 else 0 end,
+      a.apply_end_date_snapshot asc,
+      a.updated_at desc,
+      a.id desc
+  `;
+}
+
+async function getRecentApplicationRows(viewerId: number, limit: number) {
+  return sql<Record<string, unknown>[]>`
+    select
+      a.id,
+      a.job_posting_id,
+      jp.title as job_title,
+      jp.company_name,
+      s.key as source_key,
+      s.name as source_name,
+      jp.detail_url,
+      jp.external_apply_url,
+      a.resume_template_id,
+      rt.title as resume_template_title,
+      a.application_method,
+      a.status,
+      a.note,
+      a.applied_at,
+      a.apply_end_date_snapshot,
+      a.apply_period_raw_snapshot,
+      a.resume_snapshot_title,
+      a.resume_snapshot_markdown,
+      coalesce(jp.normalized_content, '') as posting_normalized_content,
+      coalesce(jp.tags, '[]'::json) as posting_tags,
+      a.created_at,
+      a.updated_at
+    from applications a
+    join job_postings jp on jp.id = a.job_posting_id
+    join sources s on s.id = jp.source_id
+    left join resume_templates rt on rt.id = a.resume_template_id
+    where a.user_id = ${viewerId}
+    order by a.updated_at desc, a.id desc
+    limit ${Math.max(1, Math.min(limit, 50))}
+  `;
+}
+
+async function getRecentDashboardPostingRows(viewerId: number, limit: number) {
+  return sql<Record<string, unknown>[]>`
+    select
+      p.id,
+      s.key as source_key,
+      s.name as source_name,
+      p.external_id,
+      p.company_name,
+      p.title,
+      p.detail_url,
+      p.external_apply_url,
+      p.ingest_kind,
+      p.posted_at,
+      p.apply_start_date,
+      p.apply_end_date,
+      p.apply_period_raw,
+      p.normalized_content,
+      p.tags,
+      coalesce(ups.curation_status, ${DEFAULT_CURATION_STATUS}) as curation_status,
+      ups.curation_note,
+      coalesce(ups.is_bookmarked, false) as is_bookmarked,
+      coalesce(ups.is_todo, false) as is_todo,
+      p.last_seen_at,
+      a.id as application_id,
+      a.status as application_status
+    from job_postings p
+    join sources s on s.id = p.source_id
+    left join user_posting_states ups
+      on ups.job_posting_id = p.id
+      and ups.user_id = ${viewerId}
+    left join applications a
+      on a.job_posting_id = p.id
+      and a.user_id = ${viewerId}
+    order by p.posted_at desc nulls last, p.created_at desc, p.id desc
+    limit ${Math.max(1, Math.min(limit, 50))}
+  `;
+}
+
+async function getSourceRows() {
+  return sql<Record<string, unknown>[]>`
+    select
+      s.id,
+      s.key,
+      s.name,
+      s.base_url,
+      s.is_enabled,
+      s.supports_sync,
+      s.last_synced_at,
+      coalesce(count(p.id), 0)::int as posting_count
+    from sources s
+    left join job_postings p on p.source_id = s.id
+    group by s.id
+    order by s.name asc
+  `;
+}
+
+const getCachedSources = cache(async () => {
+  const rows = await getSourceRows();
+  return rows.map(serializeSource);
+});
 
 async function findOrCreateSource(
   tx: DbExecutor,
@@ -799,22 +946,7 @@ async function loadApplicationByIdInternal(viewerId: number, applicationId: numb
 
 export async function getSources() {
   await requireViewer();
-  const rows = await sql<Record<string, unknown>[]>`
-    select
-      s.id,
-      s.key,
-      s.name,
-      s.base_url,
-      s.is_enabled,
-      s.supports_sync,
-      s.last_synced_at,
-      coalesce(count(p.id), 0)::int as posting_count
-    from sources s
-    left join job_postings p on p.source_id = s.id
-    group by s.id
-    order by s.name asc
-  `;
-  return rows.map(serializeSource);
+  return getCachedSources();
 }
 
 export async function getSourceSyncRuns(sourceKey: string, limit: number = 20) {
@@ -1048,6 +1180,50 @@ export async function getApplications() {
   const viewer = await requireViewer();
   const rows = await getApplicationRows(viewer.id);
   return rows.map(serializeApplication);
+}
+
+export async function getApplicationsByStatuses(statuses?: string[]) {
+  const viewer = await requireViewer();
+  const rows = await getApplicationRowsForStatuses(viewer.id, statuses);
+  return rows.map(serializeApplication);
+}
+
+export async function getApplicationStats() {
+  const viewer = await requireViewer();
+  const rows = await sql<Record<string, number>[]>`
+    select
+      count(*)::int as total,
+      count(*) filter (where application_method = 'simple')::int as simple,
+      count(*) filter (where application_method = 'cover_letter')::int as cover_letter,
+      count(*) filter (where status = 'planned')::int as planned,
+      count(*) filter (
+        where status in ('applied', 'document_passed', 'interview')
+      )::int as in_progress,
+      count(*) filter (where status = 'offer')::int as offer,
+      count(*) filter (where status in ('rejected', 'withdrawn'))::int as closed
+    from applications
+    where user_id = ${viewer.id}
+  `;
+
+  const row = rows[0] ?? {
+    closed: 0,
+    cover_letter: 0,
+    in_progress: 0,
+    offer: 0,
+    planned: 0,
+    simple: 0,
+    total: 0,
+  };
+
+  return {
+    closed: Number(row.closed ?? 0),
+    coverLetter: Number(row.cover_letter ?? 0),
+    inProgress: Number(row.in_progress ?? 0),
+    offer: Number(row.offer ?? 0),
+    planned: Number(row.planned ?? 0),
+    simple: Number(row.simple ?? 0),
+    total: Number(row.total ?? 0),
+  };
 }
 
 export async function getApplication(applicationId: number) {
@@ -1675,10 +1851,7 @@ export async function getCalendarMonth(month: string) {
   }
 
   const monthStart = `${match[1]}-${match[2]}-01`;
-  const monthEndRows = await sql<{ month_end: string }[]>`
-    select (date_trunc('month', ${monthStart}::date) + interval '1 month - 1 day')::date::text as month_end
-  `;
-  const monthEnd = monthEndRows[0].month_end;
+  const monthEnd = endOfMonth(`${match[1]}-${match[2]}`);
 
   const postingRows = await sql<Record<string, unknown>[]>`
     select
@@ -1809,7 +1982,7 @@ export async function getCalendarMonth(month: string) {
 
 export async function getDashboard() {
   const viewer = await requireViewer();
-  const [countRows, sources, recentPostingsPage, recentApplicationsRows, recentSyncRunsRows] =
+  const [countRows, sources, recentPostingRows, recentApplicationsRows, recentSyncRunsRows] =
     await Promise.all([
       sql<Record<string, number>[]>`
         select
@@ -1838,12 +2011,9 @@ export async function getDashboard() {
             where user_id = ${viewer.id}
           ) as resume_count
       `,
-      getSources(),
-      getPostingPageInternal(viewer.id, {
-        page: 1,
-        page_size: 6,
-      }),
-      getApplicationRows(viewer.id),
+      getCachedSources(),
+      getRecentDashboardPostingRows(viewer.id, 6),
+      getRecentApplicationRows(viewer.id, 6),
       sql<Record<string, unknown>[]>`
         select id, source_id, status, message, inserted_count, updated_count, total_count, started_at, finished_at
         from job_sync_runs
@@ -1864,7 +2034,7 @@ export async function getDashboard() {
     active_applications: Number(counts.active_applications ?? 0),
     interesting_postings: Number(counts.interesting_postings ?? 0),
     recent_applications: recentApplicationsRows.slice(0, 6).map(serializeApplication),
-    recent_postings: recentPostingsPage.items,
+    recent_postings: recentPostingRows.map(serializePosting),
     recent_sync_runs: recentSyncRunsRows.map(serializeSyncRun),
     resume_count: Number(counts.resume_count ?? 0),
     sources,

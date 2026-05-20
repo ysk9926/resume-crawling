@@ -56,6 +56,10 @@ function translateAuthMessage(message: string | undefined, fallback: string) {
     return "이미 가입된 이메일입니다. 로그인해 주세요.";
   }
 
+  if (/email rate limit exceeded/i.test(normalized)) {
+    return "Supabase에서 아직 가입 확인 메일을 보내고 있습니다. Supabase Dashboard에서 Auth > Providers > Email > Confirm email을 꺼 주세요.";
+  }
+
   return normalized;
 }
 
@@ -252,23 +256,11 @@ async function ensureAppUserForAuthUser(authUser: SupabaseUser) {
 
   return sql.begin(async (tx) => {
     const existing = await findUserByAuthId(tx, authUser.id);
-    const normalizedEmail = authUser.email ? normalizeEmail(authUser.email) : null;
-
     if (existing) {
-      const nextUsername = await reserveAvailableUsername(tx, inferUsername(authUser), existing.id);
-      const rows = await tx<AppUserRow[]>`
-        update users
-        set
-          username = ${nextUsername},
-          email = ${normalizedEmail},
-          last_login_at = timezone('utc', now()),
-          updated_at = timezone('utc', now())
-        where id = ${existing.id}
-        returning id, username, role, is_active, last_login_at, created_at, email, supabase_auth_user_id
-      `;
-      return rows[0];
+      return existing;
     }
 
+    const normalizedEmail = authUser.email ? normalizeEmail(authUser.email) : null;
     const fallbackUsername = await reserveAvailableUsername(tx, inferUsername(authUser));
     const isFirstUser = (await countUsers(tx)) === 0;
     const rows = await tx<AppUserRow[]>`
@@ -298,6 +290,26 @@ async function ensureAppUserForAuthUser(authUser: SupabaseUser) {
     `;
     return rows[0];
   });
+}
+
+async function touchAppUserLogin(authUser: SupabaseUser) {
+  await ensureAuthSchema();
+  const existing = await findUserByAuthId(sql, authUser.id);
+  if (!existing) {
+    return ensureAppUserForAuthUser(authUser);
+  }
+
+  const normalizedEmail = authUser.email ? normalizeEmail(authUser.email) : null;
+  const rows = await sql<AppUserRow[]>`
+    update users
+    set
+      email = ${normalizedEmail},
+      last_login_at = timezone('utc', now()),
+      updated_at = timezone('utc', now())
+    where id = ${existing.id}
+    returning id, username, role, is_active, last_login_at, created_at, email, supabase_auth_user_id
+  `;
+  return rows[0] ?? existing;
 }
 
 async function getSupabaseUser() {
@@ -355,7 +367,7 @@ export async function loginWithCredentials(payload: {
     );
   }
 
-  const appUser = await ensureAppUserForAuthUser(data.user);
+  const appUser = await touchAppUserLogin(data.user);
   return serializeViewer(appUser);
 }
 
@@ -431,7 +443,7 @@ export async function signupWithCredentials(payload: {
     };
   }
 
-  const appUser = await ensureAppUserForAuthUser(data.user);
+  const appUser = await touchAppUserLogin(data.user);
   return {
     requiresEmailConfirmation: false,
     viewer: serializeViewer(appUser),

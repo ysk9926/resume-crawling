@@ -113,8 +113,9 @@ export async function signupAction(formData: FormData) {
 
   if (signupResult.requiresEmailConfirmation) {
     redirect(
-      buildAuthRedirect("/login", {
-        message: "가입 확인 메일을 보냈습니다. 메일의 인증 링크를 연 뒤 로그인해 주세요.",
+      buildAuthRedirect("/signup", {
+        error:
+          "Supabase Auth에서 이메일 인증이 아직 켜져 있습니다. Auth > Providers > Email > Confirm email을 끄면 가입 후 바로 로그인됩니다.",
       }),
     );
   }

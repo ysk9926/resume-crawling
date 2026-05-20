@@ -6,7 +6,7 @@ import { ApiUnavailable } from "@/components/ui/api-unavailable";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { pageBodyStyle, secondaryButtonStyle } from "@/components/ui/primitives";
-import { getApplications, getResumes } from "@/lib/api";
+import { getApplicationStats, getApplicationsByStatuses, getResumes } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type { Application } from "@/lib/types";
 
@@ -84,6 +84,19 @@ function parseStatusFilter(value: string | undefined): StatusFilter {
   return "all";
 }
 
+function getStatusesForFilter(filter: StatusFilter) {
+  if (filter === "active") {
+    return ["planned", "applied", "document_passed", "interview"];
+  }
+  if (filter === "offer") {
+    return ["offer"];
+  }
+  if (filter === "closed") {
+    return ["rejected", "withdrawn"];
+  }
+  return undefined;
+}
+
 const filterTabsRowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -146,29 +159,15 @@ const columnHeaderStyle: React.CSSProperties = {
 export default async function ApplicationsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const activeFilter = parseStatusFilter(params.status);
-  const [applications, resumes] = await Promise.all([
-    getApplications().catch(() => null),
+  const [counts, applications, resumes] = await Promise.all([
+    getApplicationStats().catch(() => null),
+    getApplicationsByStatuses(getStatusesForFilter(activeFilter)).catch(() => null),
     getResumes().catch(() => null),
   ]);
 
-  if (!applications || !resumes) {
+  if (!counts || !applications || !resumes) {
     return <ApiUnavailable />;
   }
-
-  const counts = {
-    total: applications.length,
-    simple: applications.filter((a) => a.application_method === "simple").length,
-    coverLetter: applications.filter((a) => a.application_method === "cover_letter")
-      .length,
-    planned: applications.filter((a) => a.status === "planned").length,
-    inProgress: applications.filter((a) =>
-      ["applied", "document_passed", "interview"].includes(a.status),
-    ).length,
-    offer: applications.filter((a) => a.status === "offer").length,
-    closed: applications.filter((a) =>
-      ["rejected", "withdrawn"].includes(a.status),
-    ).length,
-  };
 
   const tabCounts: Record<StatusFilter, number> = {
     all: counts.total,
@@ -179,19 +178,6 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
 
   const activeFilterConfig =
     STATUS_FILTERS.find((tab) => tab.key === activeFilter) ?? STATUS_FILTERS[0];
-
-  const visibleApplications = applications
-    .filter((application) => activeFilterConfig.match(application.status))
-    .sort((a, b) => {
-      const aDate = a.apply_end_date_snapshot;
-      const bDate = b.apply_end_date_snapshot;
-      if (aDate && bDate) {
-        return aDate.localeCompare(bDate);
-      }
-      if (aDate) return -1;
-      if (bDate) return 1;
-      return b.updated_at.localeCompare(a.updated_at);
-    });
 
   return (
     <>
@@ -229,7 +215,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       </div>
 
       <div style={pageBodyStyle}>
-        {visibleApplications.length === 0 ? (
+        {applications.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
             <EmptyState
               title={
@@ -261,7 +247,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
               <span style={{ textAlign: "right" }}>최근 업데이트</span>
             </div>
             <div role="list">
-              {visibleApplications.map((application) => (
+              {applications.map((application) => (
                 <ApplicationRow
                   key={application.id}
                   application={application}
@@ -276,4 +262,3 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
     </>
   );
 }
-

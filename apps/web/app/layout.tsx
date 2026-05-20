@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   description: "취업 공고 수집, 이력서 버전 관리, 지원 현황 추적을 위한 로컬 도구",
 };
 
+export const preferredRegion = "icn1";
+
 export default async function RootLayout({
   children,
 }: Readonly<{
