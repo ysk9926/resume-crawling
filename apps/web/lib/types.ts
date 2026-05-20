@@ -9,6 +9,20 @@ export type SourceSummary = {
   posting_count: number;
 };
 
+export type Viewer = {
+  id: number;
+  username: string;
+  role: string;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+};
+
+export type AuthSession = {
+  session_token: string;
+  user: Viewer;
+};
+
 export type SyncRun = {
   id: number;
   source_id: number;

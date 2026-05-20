@@ -16,6 +16,8 @@ import {
 } from "react-icons/hi";
 import type { IconType } from "react-icons";
 
+import type { Viewer } from "@/lib/types";
+
 const STORAGE_KEY = "rw-sidebar-collapsed";
 
 type NavItem = {
@@ -125,7 +127,7 @@ function isActive(
   return true;
 }
 
-export function Sidebar() {
+export function Sidebar({ viewer }: { viewer: Viewer | null }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get("tab") ?? null;
@@ -251,24 +253,68 @@ export function Sidebar() {
           flexShrink: 0,
           padding: collapsed ? "12px 8px" : "12px 20px",
           borderTop: "1px solid var(--rw-border)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: collapsed ? "center" : "flex-start",
+          display: "grid",
           gap: 10,
-          fontSize: 11,
-          color: "var(--rw-muted)",
         }}
       >
         <div
           style={{
-            width: 8,
-            height: 8,
-            borderRadius: 999,
-            backgroundColor: "var(--rw-success)",
-            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: collapsed ? "center" : "flex-start",
+            gap: 10,
+            fontSize: 11,
+            color: "var(--rw-muted)",
           }}
-        />
-        {collapsed ? null : <span>로컬 전용 워크벤치</span>}
+        >
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 999,
+              backgroundColor: viewer?.role === "admin" ? "var(--rw-success)" : "var(--rw-accent)",
+              flexShrink: 0,
+            }}
+          />
+          {collapsed ? null : (
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "var(--rw-foreground)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {viewer?.username ?? "알 수 없는 사용자"}
+              </div>
+              <div style={{ marginTop: 2 }}>
+                {viewer?.role === "admin" ? "관리자" : "일반 사용자"}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <form action="/logout" method="post">
+          <button
+            type="submit"
+            style={{
+              width: "100%",
+              height: 34,
+              border: "1px solid var(--rw-border)",
+              borderRadius: 4,
+              backgroundColor: "transparent",
+              color: "var(--rw-muted)",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            {collapsed ? "나가기" : "로그아웃"}
+          </button>
+        </form>
       </div>
     </aside>
   );

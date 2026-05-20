@@ -1,5 +1,6 @@
 import type {
   Application,
+  AuthSession,
   CalendarMonth,
   CoverLetterItem,
   CoverLetterItemPage,
@@ -12,7 +13,11 @@ import type {
   SourceCrawlInfo,
   SourceSummary,
   SyncRun,
+  Viewer,
 } from "@/lib/types";
+import { cookies } from "next/headers";
+
+import { SESSION_COOKIE_NAME } from "@/lib/session";
 
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:3335";
 const CACHE_TAGS = {
@@ -32,12 +37,14 @@ type RequestOptions = RequestInit & {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { bodyJson, headers, ...init } = options;
   const method = (init.method ?? "GET").toUpperCase();
-  const isReadRequest = method === "GET";
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    cache: isReadRequest ? (init.cache ?? "force-cache") : "no-store",
+    cache: method === "GET" ? (init.cache ?? "no-store") : "no-store",
     headers: {
       "Content-Type": "application/json",
+      ...(sessionToken ? { "X-Session-Token": sessionToken } : {}),
       ...headers,
     },
     body: bodyJson === undefined ? init.body : JSON.stringify(bodyJson),
@@ -55,21 +62,47 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return (await response.json()) as T;
 }
 
+export async function getViewer(): Promise<Viewer> {
+  return request<Viewer>("/api/auth/me", {
+    cache: "no-store",
+  });
+}
+
+export async function signupWithCredentials(payload: {
+  username: string;
+  password: string;
+}) {
+  return request<AuthSession>("/api/auth/signup", {
+    method: "POST",
+    bodyJson: payload,
+  });
+}
+
+export async function loginWithCredentials(payload: {
+  username: string;
+  password: string;
+}) {
+  return request<AuthSession>("/api/auth/login", {
+    method: "POST",
+    bodyJson: payload,
+  });
+}
+
+export async function logoutFromApi() {
+  await request<void>("/api/auth/logout", {
+    method: "POST",
+  });
+}
+
 export async function getDashboard(): Promise<Dashboard> {
   return request<Dashboard>("/api/dashboard", {
-    next: {
-      revalidate: 30,
-      tags: [CACHE_TAGS.dashboard],
-    },
+    cache: "no-store",
   });
 }
 
 export async function getSources(): Promise<SourceSummary[]> {
   return request<SourceSummary[]>("/api/sources", {
-    next: {
-      revalidate: 60,
-      tags: [CACHE_TAGS.sources],
-    },
+    cache: "no-store",
   });
 }
 
@@ -99,10 +132,7 @@ async function getPostingPage(path: string, filters?: PostingPageFilters): Promi
     page_size: filters?.page_size,
   });
   return request<JobPostingPage>(`${path}${suffix}`, {
-    next: {
-      revalidate: 30,
-      tags: [CACHE_TAGS.postings],
-    },
+    cache: "no-store",
   });
 }
 
@@ -115,10 +145,7 @@ export async function getPostingOverview(filters?: {
     source_key: filters?.source_key,
   });
   return request<PostingOverview>(`/api/postings/overview${suffix}`, {
-    next: {
-      revalidate: 30,
-      tags: [CACHE_TAGS.postings],
-    },
+    cache: "no-store",
   });
 }
 
@@ -138,10 +165,7 @@ export async function getPostings(filters?: {
     todo: filters?.todo !== undefined ? (filters.todo ? "true" : "false") : undefined,
   });
   return request<JobPosting[]>(`/api/postings${suffix}`, {
-    next: {
-      revalidate: 30,
-      tags: [CACHE_TAGS.postings],
-    },
+    cache: "no-store",
   });
 }
 
@@ -171,47 +195,32 @@ export async function getTodoPostingsPage(filters?: PostingPageFilters): Promise
 
 export async function getResumes(): Promise<ResumeTemplate[]> {
   return request<ResumeTemplate[]>("/api/resumes", {
-    next: {
-      revalidate: 60,
-      tags: [CACHE_TAGS.resumes],
-    },
+    cache: "no-store",
   });
 }
 
 export async function getApplications(): Promise<Application[]> {
   return request<Application[]>("/api/applications", {
-    next: {
-      revalidate: 30,
-      tags: [CACHE_TAGS.applications],
-    },
+    cache: "no-store",
   });
 }
 
 export async function getCalendarMonth(month: string): Promise<CalendarMonth> {
   const suffix = buildSearchSuffix({ month });
   return request<CalendarMonth>(`/api/calendar${suffix}`, {
-    next: {
-      revalidate: 30,
-      tags: [CACHE_TAGS.postings, CACHE_TAGS.applications],
-    },
+    cache: "no-store",
   });
 }
 
 export async function getApplication(applicationId: number): Promise<Application> {
   return request<Application>(`/api/applications/${applicationId}`, {
-    next: {
-      revalidate: 15,
-      tags: [CACHE_TAGS.applications, `${CACHE_TAGS.applications}:${applicationId}`],
-    },
+    cache: "no-store",
   });
 }
 
 export async function getApplicationCoverLetterItems(applicationId: number): Promise<CoverLetterItem[]> {
   return request<CoverLetterItem[]>(`/api/applications/${applicationId}/cover-letter-items`, {
-    next: {
-      revalidate: 15,
-      tags: [CACHE_TAGS.coverLetter, `${CACHE_TAGS.coverLetter}:${applicationId}`],
-    },
+    cache: "no-store",
   });
 }
 
@@ -226,10 +235,7 @@ export async function getCoverLetterLibraryPage(filters?: {
     page_size: filters?.page_size,
   });
   return request<CoverLetterItemPage>(`/api/applications/cover-letter-library${suffix}`, {
-    next: {
-      revalidate: 15,
-      tags: [CACHE_TAGS.coverLetter],
-    },
+    cache: "no-store",
   });
 }
 
@@ -239,19 +245,13 @@ export async function getSourceSyncRuns(
 ): Promise<SyncRun[]> {
   const suffix = buildSearchSuffix({ limit });
   return request<SyncRun[]>(`/api/sources/${sourceKey}/sync-runs${suffix}`, {
-    next: {
-      revalidate: 15,
-      tags: [CACHE_TAGS.sources, `sync-runs:${sourceKey}`],
-    },
+    cache: "no-store",
   });
 }
 
 export async function getSourceCrawlInfo(sourceKey: string): Promise<SourceCrawlInfo> {
   return request<SourceCrawlInfo>(`/api/sources/${sourceKey}/crawl-info`, {
-    next: {
-      revalidate: 15,
-      tags: [CACHE_TAGS.sourceCrawlInfo, `${CACHE_TAGS.sourceCrawlInfo}:${sourceKey}`],
-    },
+    cache: "no-store",
   });
 }
 

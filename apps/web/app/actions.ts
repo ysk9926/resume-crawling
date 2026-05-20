@@ -1,5 +1,6 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -17,7 +18,10 @@ import {
   postSourceCrawlInfo,
   postCoverLetterItem,
   postSyncSource,
+  loginWithCredentials,
+  signupWithCredentials,
 } from "@/lib/api";
+import { SESSION_COOKIE_NAME } from "@/lib/session";
 import type { RememberSearchFilters } from "@/lib/types";
 
 function parseRequiredNumber(value: FormDataEntryValue | null, fieldName: string) {
@@ -56,6 +60,57 @@ function updateTags(tags: string[]) {
   for (const tag of tags) {
     updateTag(tag);
   }
+}
+
+async function setSessionCookie(token: string) {
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+}
+
+function buildAuthRedirect(pathname: string, message: string) {
+  const search = new URLSearchParams({ error: message });
+  return `${pathname}?${search.toString()}`;
+}
+
+export async function loginAction(formData: FormData) {
+  const username = String(formData.get("username") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  try {
+    const session = await loginWithCredentials({ username, password });
+    await setSessionCookie(session.session_token);
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : "로그인에 실패했습니다.";
+    redirect(buildAuthRedirect("/login", message));
+  }
+
+  redirect("/calendar");
+}
+
+export async function signupAction(formData: FormData) {
+  const username = String(formData.get("username") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (password !== confirmPassword) {
+    redirect(buildAuthRedirect("/signup", "비밀번호 확인이 일치하지 않습니다."));
+  }
+
+  try {
+    const session = await signupWithCredentials({ username, password });
+    await setSessionCookie(session.session_token);
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : "회원가입에 실패했습니다.";
+    redirect(buildAuthRedirect("/signup", message));
+  }
+
+  redirect("/calendar");
 }
 
 export async function syncSourceAction(formData: FormData) {

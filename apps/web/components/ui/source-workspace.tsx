@@ -16,6 +16,7 @@ import { formatDateTime } from "@/lib/format";
 import type { SourceSummary, SyncRun } from "@/lib/types";
 
 type Props = {
+  canSync: boolean;
   sources: SourceSummary[];
   selectedKey: string;
   recentRuns: SyncRun[];
@@ -99,7 +100,7 @@ function syncRunSummary(run: SyncRun): string {
   return delta;
 }
 
-export function SourceWorkspace({ sources, selectedKey, recentRuns }: Props) {
+export function SourceWorkspace({ canSync, sources, selectedKey, recentRuns }: Props) {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
@@ -360,7 +361,19 @@ export function SourceWorkspace({ sources, selectedKey, recentRuns }: Props) {
                 </span>
               </div>
               <div style={cardBodyStyle}>
-                <SourceSyncControls key={selected.key} sourceKey={selected.key} variant="inline" />
+                {canSync ? (
+                  <SourceSyncControls key={selected.key} sourceKey={selected.key} variant="inline" />
+                ) : (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--rw-muted)",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    공고 동기화는 관리자 계정만 실행할 수 있습니다. 조회 전용으로 최근 이력만 확인할 수 있습니다.
+                  </div>
+                )}
               </div>
             </div>
           ) : (
