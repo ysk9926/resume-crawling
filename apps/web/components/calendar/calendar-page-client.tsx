@@ -156,6 +156,7 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
     FILTER_OPTIONS.map((item) => item.key),
   );
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
 
   const visibleEvents = calendar.events.filter((event) => isLayerActive(event, activeLayers));
   const selectedEvent =
@@ -176,16 +177,24 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
     events.sort(sortEvents);
   }
 
+  const selectedDayEvents = selectedDateKey ? eventsByDate.get(selectedDateKey) ?? [] : [];
+
   const todayKey = toDateKey(new Date());
   const monthKey = calendar.month_start.slice(0, 7);
 
   function toggleLayer(layer: CalendarLayerKey) {
     setSelectedEventId(null);
+    setSelectedDateKey(null);
     setActiveLayers((current) =>
       current.includes(layer)
         ? current.filter((item) => item !== layer)
         : [...current, layer],
     );
+  }
+
+  function selectEvent(eventId: string) {
+    setSelectedDateKey(null);
+    setSelectedEventId(eventId);
   }
 
   return (
@@ -376,7 +385,7 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
                         <button
                           key={event.id}
                           type="button"
-                          onClick={() => setSelectedEventId(event.id)}
+                          onClick={() => selectEvent(event.id)}
                           title={`${event.company_name} · ${event.title}`}
                           style={{
                             display: "flex",
@@ -418,9 +427,26 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
                     })}
 
                     {remainingCount > 0 ? (
-                      <span style={{ fontSize: 11, color: "var(--rw-muted)" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedEventId(null);
+                          setSelectedDateKey(dateKey);
+                        }}
+                        aria-label={`${formatDate(dateKey)} 일정 ${dayEvents.length}건 모두 보기`}
+                        style={{
+                          appearance: "none",
+                          border: "none",
+                          backgroundColor: "transparent",
+                          padding: "2px 0",
+                          fontSize: 11,
+                          color: "var(--rw-muted)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                        }}
+                      >
                         +{remainingCount}개 더보기
-                      </span>
+                      </button>
                     ) : null}
                   </div>
                 </div>
@@ -429,6 +455,169 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
           </div>
         </div>
       </div>
+
+      {selectedDateKey && selectedDayEvents.length > 0 ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${formatDate(selectedDateKey)} 일정 전체 보기`}
+          onClick={() => setSelectedDateKey(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.18)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            zIndex: 50,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "min(420px, calc(100vw - 32px))",
+              maxHeight: "min(640px, calc(100vh - 48px))",
+              border: "1px solid var(--rw-border)",
+              borderRadius: 8,
+              backgroundColor: "#ffffff",
+              boxShadow:
+                "0 24px 60px -20px rgba(15, 23, 42, 0.25), 0 8px 24px -12px rgba(15, 23, 42, 0.15)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 16,
+                padding: "18px 20px 14px",
+                borderBottom: "1px solid var(--rw-border)",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "var(--rw-muted)",
+                  }}
+                >
+                  전체 일정
+                </div>
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 17,
+                    fontWeight: 700,
+                    color: "var(--rw-foreground)",
+                  }}
+                >
+                  {formatDate(selectedDateKey)}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 12, color: "var(--rw-muted)" }}>
+                  {selectedDayEvents.length}건
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDateKey(null)}
+                aria-label="닫기"
+                style={{
+                  appearance: "none",
+                  border: "none",
+                  backgroundColor: "transparent",
+                  color: "var(--rw-muted)",
+                  cursor: "pointer",
+                  fontSize: 22,
+                  lineHeight: 1,
+                  padding: 0,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                maxHeight: "calc(100vh - 140px)",
+                overflowY: "auto",
+                padding: 20,
+              }}
+            >
+              {selectedDayEvents.map((event) => {
+                const palette = cardStyleForEvent(event, selectedEventId === event.id);
+                const dotColor = LAYER_PALETTES[resolveEventLayer(event)].checkboxFill;
+                return (
+                  <button
+                    key={event.id}
+                    type="button"
+                    onClick={() => selectEvent(event.id)}
+                    title={`${event.company_name} · ${event.title}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      width: "100%",
+                      padding: "9px 10px",
+                      borderRadius: 4,
+                      border: `1px solid ${palette.borderColor}`,
+                      backgroundColor: palette.backgroundColor,
+                      color: palette.color,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        marginTop: 6,
+                        borderRadius: 999,
+                        backgroundColor: dotColor,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span style={{ minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: "block",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {event.company_name}
+                      </span>
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: 3,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontSize: 11,
+                          color: "var(--rw-muted)",
+                        }}
+                      >
+                        {event.title}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {selectedEvent ? (
         <div
