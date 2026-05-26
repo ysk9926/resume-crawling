@@ -476,6 +476,8 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
           <div
             onClick={(event) => event.stopPropagation()}
             style={{
+              display: "flex",
+              flexDirection: "column",
               width: "min(420px, calc(100vw - 32px))",
               maxHeight: "min(640px, calc(100vh - 48px))",
               border: "1px solid var(--rw-border)",
@@ -494,6 +496,7 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
                 gap: 16,
                 padding: "18px 20px 14px",
                 borderBottom: "1px solid var(--rw-border)",
+                flexShrink: 0,
               }}
             >
               <div>
@@ -546,7 +549,8 @@ export function CalendarPageClient({ calendar }: { calendar: CalendarMonth }) {
                 display: "flex",
                 flexDirection: "column",
                 gap: 8,
-                maxHeight: "calc(100vh - 140px)",
+                flex: 1,
+                minHeight: 0,
                 overflowY: "auto",
                 padding: 20,
               }}
