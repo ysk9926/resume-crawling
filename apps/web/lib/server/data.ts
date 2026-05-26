@@ -929,8 +929,12 @@ async function resolveCoverLetterTagIds(
   return resolved;
 }
 
-async function loadApplicationByIdInternal(viewerId: number, applicationId: number) {
-  const rows = await sql<Record<string, unknown>[]>`
+async function loadApplicationByIdInternal(
+  viewerId: number,
+  applicationId: number,
+  executor: DbExecutor = sql,
+) {
+  const rows = await executor<Record<string, unknown>[]>`
     select
       a.id,
       a.job_posting_id,
@@ -1322,7 +1326,7 @@ export async function createApplication(payload: {
         )
         returning id
       `;
-      const application = await loadApplicationByIdInternal(viewer.id, insertedRows[0].id);
+      const application = await loadApplicationByIdInternal(viewer.id, insertedRows[0].id, tx);
       if (!application) {
         throw new Error("Application could not be reloaded.");
       }
@@ -1348,7 +1352,7 @@ export async function createApplication(payload: {
       where id = ${Number(existingRows[0].id)}
     `;
 
-    const application = await loadApplicationByIdInternal(viewer.id, Number(existingRows[0].id));
+    const application = await loadApplicationByIdInternal(viewer.id, Number(existingRows[0].id), tx);
     if (!application) {
       throw new Error("Application could not be reloaded.");
     }
@@ -1510,7 +1514,7 @@ export async function createManualApplication(payload: {
       returning id
     `;
 
-    const application = await loadApplicationByIdInternal(viewer.id, applicationRows[0].id);
+    const application = await loadApplicationByIdInternal(viewer.id, applicationRows[0].id, tx);
     if (!application) {
       throw new Error("Application could not be reloaded.");
     }
@@ -1561,7 +1565,7 @@ export async function patchApplication(
     if (!rows[0]) {
       throw new Error("Application not found.");
     }
-    const application = await loadApplicationByIdInternal(viewer.id, applicationId);
+    const application = await loadApplicationByIdInternal(viewer.id, applicationId, tx);
     if (!application) {
       throw new Error("Application could not be reloaded.");
     }
