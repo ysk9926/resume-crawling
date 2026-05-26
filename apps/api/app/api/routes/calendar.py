@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date
-from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, or_, select
@@ -10,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import LIST_CACHE_TTL_SECONDS
 from app.database import get_db
-from app.models import Application, JobPosting, Source, User, UserPostingState
+from app.models import Application, JobPosting, User, UserPostingState
 from app.schemas import CalendarEventOut, CalendarMonthOut
 from app.security import get_current_user
 from app.services.cache import get_read_cache_value, make_cache_key
@@ -155,14 +154,8 @@ def load_application_events(
     return [serialize_application_event(application) for application in applications]
 
 
-def build_postings_href(source: Source, company_name: str, title: str) -> str:
-    query = urlencode(
-        {
-            "source": source.key,
-            "q": f"{company_name} {title}",
-        }
-    )
-    return f"/postings?{query}"
+def build_postings_href(posting_id: int) -> str:
+    return f"/postings?id={posting_id}"
 
 
 def serialize_posting_event(
@@ -192,7 +185,7 @@ def serialize_posting_event(
         company_name=posting.company_name,
         source_label=posting.source.name,
         status_label="공고 마감일",
-        href=build_postings_href(posting.source, posting.company_name, posting.title),
+        href=build_postings_href(posting.id),
         detail_url=posting.detail_url,
         external_apply_url=posting.external_apply_url,
         badges=badges,

@@ -59,6 +59,7 @@ const POSTING_TABS: Array<{
 
 type PageProps = {
   searchParams: Promise<{
+    id?: string;
     q?: string;
     source?: string;
     tab?: string;
@@ -77,10 +78,12 @@ export default async function PostingsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const source = params.source ?? "";
+  const postingId = parsePostingId(params.id);
   const tab = parsePostingTab(params.tab);
   const page = parsePageNumber(params.page);
 
   const filters = {
+    posting_id: postingId,
     q: q || undefined,
     source_key: source || undefined,
     page,
@@ -89,6 +92,7 @@ export default async function PostingsPage({ searchParams }: PageProps) {
 
   const [overview, postingsPage, resumes, sources] = await Promise.all([
     getPostingOverview({
+      posting_id: postingId,
       q: q || undefined,
       source_key: source || undefined,
     }).catch(() => null),
@@ -171,10 +175,15 @@ export default async function PostingsPage({ searchParams }: PageProps) {
         <button type="submit" style={primaryButtonStyle}>
           필터 적용
         </button>
-        {q || source ? (
+        {q || source || postingId != null ? (
           <Link href={resetHref} style={secondaryButtonStyle}>
             초기화
           </Link>
+        ) : null}
+        {postingId != null ? (
+          <span style={{ fontSize: 11, color: "var(--rw-muted)" }}>
+            캘린더에서 열린 단일 공고를 보고 있습니다.
+          </span>
         ) : null}
       </form>
 
@@ -232,7 +241,12 @@ export default async function PostingsPage({ searchParams }: PageProps) {
         ) : (
           <div>
             {postingsPage.items.map((posting) => (
-              <PostingRow key={posting.id} posting={posting} resumes={resumes} />
+              <PostingRow
+                key={posting.id}
+                posting={posting}
+                resumes={resumes}
+                defaultOpen={postingId != null && posting.id === postingId}
+              />
             ))}
           </div>
         )}
@@ -246,6 +260,12 @@ export default async function PostingsPage({ searchParams }: PageProps) {
       </div>
     </>
   );
+}
+
+function parsePostingId(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function parsePostingTab(value: string | undefined): PostingTabKey {
@@ -441,12 +461,15 @@ function buildPageWindow(page: number, totalPages: number): Array<number | "elli
 function PostingRow({
   posting,
   resumes,
+  defaultOpen = false,
 }: {
   posting: JobPosting;
   resumes: ResumeTemplate[];
+  defaultOpen?: boolean;
 }) {
   return (
     <details
+      open={defaultOpen || undefined}
       style={{
         borderBottom: "1px solid var(--rw-border)",
       }}

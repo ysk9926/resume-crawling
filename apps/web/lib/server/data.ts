@@ -28,6 +28,7 @@ type PostingFilters = {
   curation_status?: string;
   page?: number;
   page_size?: number;
+  posting_id?: number;
   q?: string;
   source_key?: string;
   tab?: "all" | "new" | "interesting" | "ignored" | "bookmarked" | "todo";
@@ -281,6 +282,10 @@ function buildPostingFilterSql(
 ) {
   const conditions = [sql`true`];
 
+  if (filters.posting_id != null && Number.isFinite(filters.posting_id)) {
+    conditions.push(sql`p.id = ${filters.posting_id}`);
+  }
+
   if (filters.q?.trim()) {
     const wildcard = `%${filters.q.trim()}%`;
     conditions.push(sql`
@@ -349,7 +354,10 @@ function buildPostingFilterSql(
   `;
 }
 
-async function getPostingOverviewInternal(viewerId: number, filters: { q?: string; source_key?: string }) {
+async function getPostingOverviewInternal(
+  viewerId: number,
+  filters: { posting_id?: number; q?: string; source_key?: string },
+) {
   const fromSql = buildPostingFilterSql(viewerId, filters);
   const rows = await sql<Record<string, number>[]>`
     select
@@ -979,7 +987,9 @@ export async function getSourceSyncRuns(sourceKey: string, limit: number = 20) {
   return getCachedSourceSyncRuns(sourceKey, limit);
 }
 
-export async function getPostingOverview(filters?: { q?: string; source_key?: string }) {
+export async function getPostingOverview(
+  filters?: { posting_id?: number; q?: string; source_key?: string },
+) {
   const viewer = await requireViewer();
   return getPostingOverviewInternal(viewer.id, filters ?? {});
 }

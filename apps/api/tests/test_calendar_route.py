@@ -186,6 +186,19 @@ def test_load_calendar_month_combines_posting_layers_without_duplicate_events() 
         assert planned_event.badges == ["자소서 작성"]
 
 
+def test_posting_event_href_uses_posting_id_for_workbench_deeplink() -> None:
+    with make_session() as session:
+        user = seed_calendar_data(session)
+
+        month = load_calendar_month(session, user, "2026-05")
+        posting_events = [item for item in month.events if item.kind == "posting"]
+
+        assert posting_events
+        for event in posting_events:
+            posting_id = int(event.id.split(":", 1)[1])
+            assert event.href == f"/postings?id={posting_id}"
+
+
 def test_load_calendar_month_maps_applied_events_to_applied_date() -> None:
     with make_session() as session:
         user = seed_calendar_data(session)
