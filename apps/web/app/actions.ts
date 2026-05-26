@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath, updateTag } from "next/cache";
+import { refresh, revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
@@ -12,6 +12,7 @@ import {
   deleteCoverLetterItem,
   patchCoverLetterItem,
   patchApplication,
+  patchApplicationStatus,
   patchPosting,
   patchResume,
   postSourceCrawlInfo,
@@ -184,6 +185,7 @@ export async function updatePostingCurationAction(formData: FormData) {
   });
   updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings]);
   revalidateAll();
+  refresh();
 }
 
 export async function togglePostingBookmarkAction(formData: FormData) {
@@ -192,6 +194,7 @@ export async function togglePostingBookmarkAction(formData: FormData) {
   await patchPosting(postingId, { is_bookmarked: next });
   updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings]);
   revalidateAll();
+  refresh();
 }
 
 export async function togglePostingTodoAction(formData: FormData) {
@@ -200,6 +203,7 @@ export async function togglePostingTodoAction(formData: FormData) {
   await patchPosting(postingId, { is_todo: next });
   updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings]);
   revalidateAll();
+  refresh();
 }
 
 export async function createResumeAction(formData: FormData) {
@@ -210,6 +214,7 @@ export async function createResumeAction(formData: FormData) {
   });
   updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.resumes, CACHE_TAGS.applications]);
   revalidateAll();
+  refresh();
 }
 
 export async function updateResumeAction(formData: FormData) {
@@ -221,6 +226,7 @@ export async function updateResumeAction(formData: FormData) {
   });
   updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.resumes, CACHE_TAGS.applications]);
   revalidateAll();
+  refresh();
 }
 
 export async function createApplicationAction(formData: FormData) {
@@ -325,6 +331,16 @@ export async function updateApplicationAction(formData: FormData) {
   updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings, CACHE_TAGS.applications]);
   revalidateAll();
   revalidatePath(`/applications/${applicationId}`);
+  refresh();
+}
+
+export async function updateApplicationStatusAction(formData: FormData) {
+  const applicationId = parseRequiredNumber(formData.get("applicationId"), "applicationId");
+  await patchApplicationStatus(applicationId, String(formData.get("status") ?? "planned"));
+  updateTags([CACHE_TAGS.dashboard, CACHE_TAGS.postings, CACHE_TAGS.applications]);
+  revalidateAll();
+  revalidatePath(`/applications/${applicationId}`);
+  refresh();
 }
 
 export async function createCoverLetterItemAction(formData: FormData) {

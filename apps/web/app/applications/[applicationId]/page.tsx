@@ -14,6 +14,10 @@ import { CoverLetterTagFilter } from "@/components/applications/cover-letter-tag
 import { CopyTextButton } from "@/components/applications/copy-text-button";
 import { ResumeTemplatePicker } from "@/components/applications/resume-template-picker";
 import { ApiUnavailable } from "@/components/ui/api-unavailable";
+import {
+  ActionToastForm,
+  ActionToastSubmitButton,
+} from "@/components/ui/action-toast-form";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -583,7 +587,11 @@ function InfoTab({
   resumeTemplates: ResumeTemplate[];
 }) {
   return (
-    <form action={updateApplicationAction}>
+    <ActionToastForm
+      action={updateApplicationAction}
+      errorMessage="지원 현황 저장에 실패했습니다."
+      successMessage="지원 현황을 저장했습니다."
+    >
       <input type="hidden" name="applicationId" value={application.id} />
 
       <div
@@ -769,11 +777,14 @@ function InfoTab({
         <span style={{ fontSize: 11, color: "var(--rw-muted)" }}>
           최종 수정 · {formatDateTime(application.updated_at)}
         </span>
-        <button type="submit" style={primaryButtonStyle}>
+        <ActionToastSubmitButton
+          pendingLabel="저장 중..."
+          style={primaryButtonStyle}
+        >
           지원 현황 저장
-        </button>
+        </ActionToastSubmitButton>
       </div>
-    </form>
+    </ActionToastForm>
   );
 }
 

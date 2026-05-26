@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { inputStyle, secondaryButtonStyle } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/toast-provider";
 import type { ResumeTemplate } from "@/lib/types";
 
 const labelStyle: React.CSSProperties = {
@@ -29,6 +30,7 @@ export function ResumeTemplatePicker({
   resumeTitleInputName,
   resumeMarkdownTextareaName,
 }: Props) {
+  const showToast = useToast();
   const [selectedId, setSelectedId] = useState<string>(
     defaultTemplateId !== null ? String(defaultTemplateId) : "",
   );
@@ -51,6 +53,11 @@ export function ResumeTemplatePicker({
     if (markdownTextarea) {
       markdownTextarea.value = template.markdown_content;
     }
+    showToast({
+      title: "이력서 본문을 불러왔습니다.",
+      description: template.title,
+      tone: "success",
+    });
   }
 
   return (

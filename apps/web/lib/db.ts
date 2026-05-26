@@ -30,7 +30,4 @@ if (process.env.NODE_ENV !== "production") {
   globalForSql.__resumeWorkbenchSql = sql;
 }
 
-export type DbExecutor = {
-  [key: string]: any;
-  <T = any>(template: TemplateStringsArray, ...parameters: unknown[]): T;
-};
+export type DbExecutor = postgres.Sql | postgres.TransactionSql;

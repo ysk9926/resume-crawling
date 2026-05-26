@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { Sidebar } from "@/components/ui/sidebar";
+import { ToastProvider } from "@/components/ui/toast-provider";
 import { getViewer } from "@/lib/api";
 import { isPublicPath } from "@/lib/session";
 
@@ -39,32 +40,34 @@ export default async function RootLayout({
         />
       </head>
       <body suppressHydrationWarning>
-        {publicPath ? (
-          children
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              height: "100vh",
-              overflow: "hidden",
-            }}
-          >
-            <Suspense fallback={null}>
-              <Sidebar viewer={viewer} />
-            </Suspense>
-            <main
+        <ToastProvider>
+          {publicPath ? (
+            children
+          ) : (
+            <div
               style={{
-                flex: 1,
                 display: "flex",
-                flexDirection: "column",
-                minWidth: 0,
+                height: "100vh",
                 overflow: "hidden",
               }}
             >
-              {children}
-            </main>
-          </div>
-        )}
+              <Suspense fallback={null}>
+                <Sidebar viewer={viewer} />
+              </Suspense>
+              <main
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  minWidth: 0,
+                  overflow: "hidden",
+                }}
+              >
+                {children}
+              </main>
+            </div>
+          )}
+        </ToastProvider>
       </body>
     </html>
   );

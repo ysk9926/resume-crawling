@@ -1,4 +1,8 @@
 import { createResumeAction, updateResumeAction } from "@/app/actions";
+import {
+  ActionToastForm,
+  ActionToastSubmitButton,
+} from "@/components/ui/action-toast-form";
 import { ApiUnavailable } from "@/components/ui/api-unavailable";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
@@ -86,7 +90,11 @@ export default async function ResumesPage() {
               마스터 이력서 초안이 미리 채워져 있으며, 생성 후 아래에서 계속 다듬을 수 있습니다.
             </span>
           </div>
-          <form action={createResumeAction}>
+          <ActionToastForm
+            action={createResumeAction}
+            errorMessage="이력서 템플릿 생성에 실패했습니다."
+            successMessage="이력서 템플릿을 생성했습니다."
+          >
             <div style={formGridStyle}>
               <input
                 name="title"
@@ -110,11 +118,14 @@ export default async function ResumesPage() {
               />
             </div>
             <div style={actionRow}>
-              <button type="submit" style={primaryButtonStyle}>
+              <ActionToastSubmitButton
+                pendingLabel="생성 중..."
+                style={primaryButtonStyle}
+              >
                 템플릿 생성
-              </button>
+              </ActionToastSubmitButton>
             </div>
-          </form>
+          </ActionToastForm>
         </section>
 
         {/* Existing */}
@@ -176,8 +187,10 @@ export default async function ResumesPage() {
                     </div>
                   </summary>
 
-                  <form
+                  <ActionToastForm
                     action={updateResumeAction}
+                    errorMessage="이력서 템플릿 저장에 실패했습니다."
+                    successMessage="이력서 템플릿을 저장했습니다."
                     style={{
                       borderTop: "1px solid var(--rw-border)",
                       backgroundColor: "var(--rw-subtle)",
@@ -197,11 +210,14 @@ export default async function ResumesPage() {
                       />
                     </div>
                     <div style={actionRow}>
-                      <button type="submit" style={primaryButtonStyle}>
+                      <ActionToastSubmitButton
+                        pendingLabel="저장 중..."
+                        style={primaryButtonStyle}
+                      >
                         템플릿 저장
-                      </button>
+                      </ActionToastSubmitButton>
                     </div>
-                  </form>
+                  </ActionToastForm>
                 </details>
               ))}
             </div>

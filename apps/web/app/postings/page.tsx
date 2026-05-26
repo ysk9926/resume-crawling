@@ -5,6 +5,10 @@ import {
   updatePostingCurationAction,
 } from "@/app/actions";
 import { ManualPostingModal } from "@/components/applications/manual-posting-modal";
+import {
+  ActionToastForm,
+  ActionToastSubmitButton,
+} from "@/components/ui/action-toast-form";
 import { BookmarkToggle } from "@/components/ui/bookmark-toggle";
 import { TodoToggle } from "@/components/ui/todo-toggle";
 import { ApiUnavailable } from "@/components/ui/api-unavailable";
@@ -693,8 +697,10 @@ function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: Resume
           gridTemplateColumns: "1fr 1fr",
         }}
       >
-        <form
+        <ActionToastForm
           action={updatePostingCurationAction}
+          errorMessage="공고 메모 저장에 실패했습니다."
+          successMessage="공고 메모를 저장했습니다."
           style={{
             padding: "16px 24px",
             borderRight: "1px solid var(--rw-border)",
@@ -732,11 +738,14 @@ function ExpandBody({ posting, resumes }: { posting: JobPosting; resumes: Resume
             style={textareaStyle}
           />
           <div>
-            <button type="submit" style={primaryButtonStyle}>
+            <ActionToastSubmitButton
+              pendingLabel="저장 중..."
+              style={primaryButtonStyle}
+            >
               메모 저장
-            </button>
+            </ActionToastSubmitButton>
           </div>
-        </form>
+        </ActionToastForm>
 
         <form
           action={createApplicationAction}

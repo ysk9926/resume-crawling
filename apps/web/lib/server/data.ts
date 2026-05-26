@@ -1,6 +1,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import type postgres from "postgres";
 
 import { type DbExecutor, sql } from "@/lib/db";
 import { requireViewer } from "@/lib/server/auth";
@@ -22,6 +23,8 @@ import type {
 } from "@/lib/types";
 
 const DEFAULT_CURATION_STATUS = "new";
+
+type SqlFragment = postgres.Fragment;
 
 type PostingFilters = {
   bookmarked?: boolean;
@@ -59,7 +62,7 @@ function asStringArray(value: unknown): string[] {
   return value.map((item) => String(item));
 }
 
-function combineConditions(conditions: any[]) {
+function combineConditions(conditions: SqlFragment[]) {
   return conditions.reduce(
     (current, condition, index) => (index === 0 ? condition : sql`${current} and ${condition}`),
     sql`true`,
@@ -1567,6 +1570,29 @@ export async function patchApplication(
         resume_template_id = ${payload.resume_template_id},
         resume_snapshot_title = ${payload.resume_snapshot_title},
         resume_snapshot_markdown = ${payload.resume_snapshot_markdown},
+        updated_at = timezone('utc', now())
+      where id = ${applicationId}
+        and user_id = ${viewer.id}
+      returning id
+    `;
+    if (!rows[0]) {
+      throw new Error("Application not found.");
+    }
+    const application = await loadApplicationByIdInternal(viewer.id, applicationId, tx);
+    if (!application) {
+      throw new Error("Application could not be reloaded.");
+    }
+    return application;
+  });
+}
+
+export async function patchApplicationStatus(applicationId: number, status: string) {
+  const viewer = await requireViewer();
+  return sql.begin(async (tx) => {
+    const rows = await tx<{ id: number }[]>`
+      update applications
+      set
+        status = ${status},
         updated_at = timezone('utc', now())
       where id = ${applicationId}
         and user_id = ${viewer.id}

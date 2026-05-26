@@ -1,6 +1,7 @@
 "use client";
 
 import { togglePostingTodoAction } from "@/app/actions";
+import { ActionToastForm } from "@/components/ui/action-toast-form";
 import { secondaryButtonStyle } from "@/components/ui/primitives";
 
 export function TodoToggle({
@@ -13,8 +14,10 @@ export function TodoToggle({
   const label = isTodo ? "작성예정 해제" : "작성예정으로 올리기";
 
   return (
-    <form
+    <ActionToastForm
       action={togglePostingTodoAction}
+      errorMessage="작성예정 상태 변경에 실패했습니다."
+      successMessage={isTodo ? "작성예정을 해제했습니다." : "작성예정으로 표시했습니다."}
       onClick={(event) => event.stopPropagation()}
       style={{ display: "inline-flex" }}
     >
@@ -46,6 +49,6 @@ export function TodoToggle({
       >
         작성예정
       </button>
-    </form>
+    </ActionToastForm>
   );
 }
